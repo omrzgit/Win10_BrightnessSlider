@@ -243,6 +243,7 @@ namespace Win10_BrightnessSlider
             Thread.Sleep(250);
             //calling this again to fix issue, i have to manualy detect monitor
             riScreens = RePopulateSliders();
+            RestoreSavedBrightness(riScreens);
 
             tbxLog_AppendText("\r\n GUI_Update__AllSliderControls...");
             GUI_Update__AllSliderControls();
@@ -500,12 +501,12 @@ namespace Win10_BrightnessSlider
                     if (isIncrement)
                     {
                         var newval = MathFn.Clamp(val + 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, true);
+                        var ret = riScreen1.SetBrightness(newval, false);
                     }
                     else //if (e.Delta < 0)
                     {
                         var newval = MathFn.Clamp(val - 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, true);
+                        var ret = riScreen1.SetBrightness(newval, false);
                     }
 
                     if (Visible)
@@ -549,6 +550,7 @@ namespace Win10_BrightnessSlider
                     var riScreens = RePopulateSliders();
                     if (persist_LastBrighnessValue)
                         RestoreBrighnessLevel_fromBackup(riScreens);
+                    RestoreSavedBrightness(riScreens);
                 }
                 catch (Exception ex)
                 {
@@ -1038,6 +1040,37 @@ namespace Win10_BrightnessSlider
                 }
             }
             return TaskBarLocationFn.GetSliderLocation(this.Size, isWindows11);
+        }
+
+        private void RestoreSavedBrightness(List<RichInfoScreen> screens)
+        {
+            try
+            {
+                var settings = Settings_json.Get();
+                if (!settings.RestoreBrightnessOnStartup || settings.monitorNames == null || screens == null)
+                    return;
+
+                foreach (var scr in screens)
+                {
+                    string wmi = scr.WMIMonitorID?.InstanceName;
+                    string dc = scr.dc_TargetDeviceName?.monitorDevicePath;
+
+                    MonitorNames found = null;
+                    if (!string.IsNullOrWhiteSpace(wmi))
+                        found = settings.monitorNames.FirstOrDefault(x => x.wmi_InstanceName == wmi);
+                    if (found == null && !string.IsNullOrWhiteSpace(dc))
+                        found = settings.monitorNames.FirstOrDefault(x => x.dc_monitorDevicePath == dc);
+
+                    if (found != null && found.SavedBrightness.HasValue)
+                    {
+                        scr.SetBrightness(found.SavedBrightness.Value, false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                RamLogger.Log("RestoreSavedBrightness error: " + ex);
+            }
         }
 
         void RestartApp_ifRamUsage_isBiggerThan(int maxAllowed_RamUsage = 150)
@@ -1715,6 +1748,26 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
 
                 mi_extras.DropDown.Items.Add(mi_rememberPosition);
                 mi_extras.DropDown.Items.Add(mi_resetPosition);
+                mi_extras.DropDown.Items.Add("-");
+
+                var mi_restoreBrightness = new ToolStripMenuItem("Restore Brightness on Startup") { CheckOnClick = true };
+                mi_restoreBrightness.Checked = Settings_json.Get().RestoreBrightnessOnStartup;
+                mi_restoreBrightness.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.RestoreBrightnessOnStartup = mi_restoreBrightness.Checked;
+                    if (st.RestoreBrightnessOnStartup && riScreens != null)
+                    {
+                        foreach (var scr in riScreens)
+                        {
+                            int cur = scr.GetBrightness();
+                            if (cur >= 0)
+                                RichInfoScreen.SaveMonitorBrightness(scr, cur);
+                        }
+                    }
+                    st.SaveTo_JsonFile();
+                };
+                mi_extras.DropDown.Items.Add(mi_restoreBrightness);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);

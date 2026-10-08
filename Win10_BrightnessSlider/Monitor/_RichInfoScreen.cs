@@ -220,9 +220,54 @@ namespace Win10_BrightnessSlider
             }
 
             RicInfoScreenHolder.RememberBrightness(this,value) ;
+            if (!_isMouseDown)
+            {
+                SaveMonitorBrightness(this, value);
+            }
             
             return value;
 
+        }
+
+        public static void SaveMonitorBrightness(RichInfoScreen scr, int brightness)
+        {
+            try
+            {
+                var settings = Settings_json.Get();
+                if (!settings.RestoreBrightnessOnStartup) return;
+
+                if (settings.monitorNames == null)
+                    settings.monitorNames = new List<MonitorNames>();
+
+                string wmi = scr.WMIMonitorID?.InstanceName;
+                string dc = scr.dc_TargetDeviceName?.monitorDevicePath;
+
+                MonitorNames found = null;
+                if (!string.IsNullOrWhiteSpace(wmi))
+                    found = settings.monitorNames.FirstOrDefault(x => x.wmi_InstanceName == wmi);
+                if (found == null && !string.IsNullOrWhiteSpace(dc))
+                    found = settings.monitorNames.FirstOrDefault(x => x.dc_monitorDevicePath == dc);
+
+                if (found != null)
+                {
+                    found.SavedBrightness = brightness;
+                }
+                else
+                {
+                    settings.monitorNames.Add(new MonitorNames
+                    {
+                        SavedBrightness = brightness,
+                        wmi_InstanceName = wmi,
+                        dc_monitorDevicePath = dc
+                    });
+                }
+
+                settings.SaveTo_JsonFile();
+            }
+            catch (Exception ex)
+            {
+                RamLogger.Log("SaveMonitorBrightness error: " + ex);
+            }
         }
 
         /// <summary>

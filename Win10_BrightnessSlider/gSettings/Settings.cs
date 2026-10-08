@@ -48,6 +48,8 @@ namespace Win10_BrightnessSlider
         public int WindowPositionX { get; set; } = 0;
         public int WindowPositionY { get; set; } = 0;
         public bool HasCustomWindowPosition { get; set; } = false;
+
+        public bool RestoreBrightnessOnStartup { get; set; } = false;
     }
 
     public class MonitorNames
@@ -58,6 +60,8 @@ namespace Win10_BrightnessSlider
 
         public string wmi_InstanceName { get; set; }
         public string dc_monitorDevicePath { get; set; }
+
+        public int? SavedBrightness { get; set; } = null;
     }
 
     public class CustomTheme
