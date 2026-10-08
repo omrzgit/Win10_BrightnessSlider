@@ -35,7 +35,10 @@ targeting laptops.
 * Supports ddc/ci monitors 
 * Seperate Sliders For Multiple Monitors
 * Volume like Slider to Change Monitor Brightness
-* Option to Run At Startup
+* Option to Run At Startup (or as Admin under Extras)
+* Restart as Admin from tray menu
+* Win+Space hotkey to open Everything (auto-locates & links exe)
+* Rename monitors by clicking directly on monitor label
 * Ability to *"Rescan/Detect Monitor"* after a Monitor Plugged in/out
 
 #### ScreenShots
