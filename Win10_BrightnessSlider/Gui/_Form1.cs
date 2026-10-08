@@ -487,8 +487,7 @@ namespace Win10_BrightnessSlider
             ////requires ui to be visible, otherwise error.
             //var ucSlderLi = getUCSliderLi(); //var slider1 = ucSlderLi.FirstOrDefault();
 
-            var riScreen1 = riScreens.FirstOrDefault();
-            if (riScreen1 is null)
+            if (riScreens == null || riScreens.Count == 0)
                 return;
 
             //dont freeze Global Key Hook - release it immediately by doing LongRunningProcess on Seperate Thread. (Task.Run)
@@ -496,17 +495,17 @@ namespace Win10_BrightnessSlider
             {
                 this.Invoke((Action)delegate
                 {
-                    var val = riScreen1.GetBrightness();
+                    var st = Settings_json.Get();
+                    var targets = (st.MouseWheelChangesAllScreens && riScreens.Count > 1)
+                        ? riScreens
+                        : new List<RichInfoScreen> { riScreens.FirstOrDefault() };
 
-                    if (isIncrement)
+                    foreach (var scr in targets)
                     {
-                        var newval = MathFn.Clamp(val + 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, false);
-                    }
-                    else //if (e.Delta < 0)
-                    {
-                        var newval = MathFn.Clamp(val - 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, false);
+                        if (scr == null) continue;
+                        var val = scr.GetBrightness();
+                        var newval = isIncrement ? MathFn.Clamp(val + 5, 0, 100) : MathFn.Clamp(val - 5, 0, 100);
+                        scr.SetBrightness(newval, false);
                     }
 
                     if (Visible)
@@ -1773,6 +1772,16 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                     st.SaveTo_JsonFile();
                 };
                 mi_extras.DropDown.Items.Add(mi_restoreBrightness);
+
+                var mi_mouseWheelAllScreens = new ToolStripMenuItem("Mouse Wheel Changes All Screens") { CheckOnClick = true };
+                mi_mouseWheelAllScreens.Checked = Settings_json.Get().MouseWheelChangesAllScreens;
+                mi_mouseWheelAllScreens.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.MouseWheelChangesAllScreens = mi_mouseWheelAllScreens.Checked;
+                    st.SaveTo_JsonFile();
+                };
+                mi_extras.DropDown.Items.Add(mi_mouseWheelAllScreens);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);
