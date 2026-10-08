@@ -737,9 +737,37 @@ namespace Win10_BrightnessSlider
 						themedControl.FrameColor = BorderColor1;
 					}
 
+					if (ucSldr is Iuc_brSlider sliderInterface)
+					{
+						HookSliderLinking(sliderInterface);
+					}
+
 					fLayPnl1.Controls.Add(ucSldr);
                 }
                 //uc_brSlider2_List = getUCSliderLi()
+
+                if (riScreens.Count > 1 && fLayPnl1.Controls.Count > 0)
+                {
+                    var firstCtrl = fLayPnl1.Controls[0];
+                    pb_linkSliders = new PictureBox
+                    {
+                        Size = new Size(24, 18),
+                        Location = new Point(firstCtrl.Width - 34, 6),
+                        Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                        Cursor = Cursors.Hand,
+                        BackColor = Color.Transparent
+                    };
+                    pb_linkSliders.Click += (s, e) =>
+                    {
+                        var st = Settings_json.Get();
+                        st.LinkSliders = !st.LinkSliders;
+                        st.SaveTo_JsonFile();
+                        UpdateLinkSlidersUI();
+                    };
+                    firstCtrl.Controls.Add(pb_linkSliders);
+                    pb_linkSliders.BringToFront();
+                    UpdateLinkSlidersUI();
+                }
 
                 FixFormHeight();
                 this.ResumeLayout();
@@ -1070,6 +1098,96 @@ namespace Win10_BrightnessSlider
             {
                 RamLogger.Log("RestoreSavedBrightness error: " + ex);
             }
+        }
+
+        private bool _isSyncingSliders = false;
+        private Dictionary<Iuc_brSlider, int> _sliderStartValues = new Dictionary<Iuc_brSlider, int>();
+        private ToolStripMenuItem mi_linkSliders;
+        private PictureBox pb_linkSliders;
+
+        private void HookSliderLinking(Iuc_brSlider slider)
+        {
+            slider.SliderValueChanged += (source, newVal, isMouseDown) =>
+            {
+                if (_isSyncingSliders || !Settings_json.Get().LinkSliders)
+                    return;
+
+                _isSyncingSliders = true;
+                try
+                {
+                    var allSliders = getUCSliderList();
+                    if (!_sliderStartValues.ContainsKey(source))
+                    {
+                        foreach (var s in allSliders)
+                            _sliderStartValues[s] = s.CurrentValue;
+                    }
+
+                    int startVal = _sliderStartValues[source];
+                    int delta = newVal - startVal;
+
+                    foreach (var other in allSliders)
+                    {
+                        if (other == source) continue;
+                        if (!_sliderStartValues.ContainsKey(other))
+                            _sliderStartValues[other] = other.CurrentValue;
+
+                        int otherStart = _sliderStartValues[other];
+                        int target = MathFn.Clamp(otherStart + delta, 0, 100);
+                        other.SetSliderValue(target, isMouseDown);
+                    }
+
+                    if (!isMouseDown)
+                    {
+                        _sliderStartValues.Clear();
+                    }
+                }
+                finally
+                {
+                    _isSyncingSliders = false;
+                }
+            };
+        }
+
+        private void UpdateLinkSlidersUI()
+        {
+            bool linked = Settings_json.Get().LinkSliders;
+            if (pb_linkSliders != null && !pb_linkSliders.IsDisposed)
+            {
+                pb_linkSliders.Image?.Dispose();
+                pb_linkSliders.Image = CreateLinkIcon(linked, TextColor1);
+                HelperFn.SetTooltip(pb_linkSliders, linked ? "Sliders Linked (Click to unlink)" : "Link Sliders (Click to link)", "Link Sliders");
+            }
+            if (mi_linkSliders != null)
+                mi_linkSliders.Checked = linked;
+        }
+
+        private static Bitmap CreateLinkIcon(bool linked, Color color)
+        {
+            var bmp = new Bitmap(24, 18);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                Color penColor = linked ? color : Color.FromArgb(90, color);
+                using (var pen = new Pen(penColor, 1.8f))
+                {
+                    // Draw left chain loop
+                    g.DrawArc(pen, 2, 4, 8, 8, 90, 180);
+                    g.DrawLine(pen, 6, 4, 10, 4);
+                    g.DrawLine(pen, 6, 12, 10, 12);
+
+                    // Draw right chain loop
+                    g.DrawArc(pen, 12, 4, 8, 8, 270, 180);
+                    g.DrawLine(pen, 12, 4, 16, 4);
+                    g.DrawLine(pen, 12, 12, 16, 12);
+
+                    // Link connecting bar
+                    if (linked)
+                    {
+                        g.DrawLine(pen, 8, 8, 14, 8);
+                    }
+                }
+            }
+            return bmp;
         }
 
         void RestartApp_ifRamUsage_isBiggerThan(int maxAllowed_RamUsage = 150)
@@ -1782,6 +1900,17 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                     st.SaveTo_JsonFile();
                 };
                 mi_extras.DropDown.Items.Add(mi_mouseWheelAllScreens);
+
+                mi_linkSliders = new ToolStripMenuItem("Link Sliders Together") { CheckOnClick = true };
+                mi_linkSliders.Checked = Settings_json.Get().LinkSliders;
+                mi_linkSliders.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.LinkSliders = mi_linkSliders.Checked;
+                    st.SaveTo_JsonFile();
+                    UpdateLinkSlidersUI();
+                };
+                mi_extras.DropDown.Items.Add(mi_linkSliders);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);

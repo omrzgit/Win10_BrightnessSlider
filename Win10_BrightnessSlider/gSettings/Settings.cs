@@ -53,6 +53,7 @@ namespace Win10_BrightnessSlider
         public bool RestoreBrightnessOnStartup { get => RememberLastBrightness; set => RememberLastBrightness = value; }
 
         public bool MouseWheelChangesAllScreens { get; set; } = false;
+        public bool LinkSliders { get; set; } = false;
     }
 
     public class MonitorNames

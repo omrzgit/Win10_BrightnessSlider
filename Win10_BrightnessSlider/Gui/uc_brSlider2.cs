@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -14,9 +14,20 @@ using System.Drawing.Drawing2D;
 
 namespace Win10_BrightnessSlider
 {
-    public partial class uc_brSlider2 : UserControl
+    public partial class uc_brSlider2 : UserControl, Iuc_brSlider
     {
         public RichInfoScreen riScreen;
+        RichInfoScreen Iuc_brSlider.richInfoScreen { get => riScreen; set => riScreen = value; }
+        void Iuc_brSlider.Set_MonitorName(string name) { lbl_Name.Text = name; }
+        public int CurrentValue => trackBar1.Value;
+        public event Action<Iuc_brSlider, int, bool> SliderValueChanged;
+
+        public void SetSliderValue(int value, bool isMouseDown)
+        {
+            trackBar1.Value = value;
+            label1.Text = value + "";
+            riScreen.SetBrightness(value, isMouseDown);
+        }
 
 
         public static bool tracker_jumpToValue_enabled = true;
@@ -132,6 +143,7 @@ namespace Win10_BrightnessSlider
         {
             _isMouseDown = false;
             trackBar1_Scroll(null, null);
+            SliderValueChanged?.Invoke(this, trackBar1.Value, false);
         }
 
         int msMove_lastX = -1;
@@ -153,6 +165,7 @@ namespace Win10_BrightnessSlider
             {
                 label1.Text = val + "";
             }
+            SliderValueChanged?.Invoke(this, trackBar1.Value, _isMouseDown);
         }
 
         // value 0 to 100, REQUİRES GUİ - made these 3 for mouse hover on notify-rect
@@ -169,11 +182,13 @@ namespace Win10_BrightnessSlider
         {
             var newValue = trackBar1.Value + trackBar1.SmallChange;
             Slider_SetBrightness(newValue);
+            SliderValueChanged?.Invoke(this, trackBar1.Value, false);
         }
         public void Slider_SetBrightness_DOWN()
         {
             var newValue = trackBar1.Value - trackBar1.SmallChange;
             Slider_SetBrightness(newValue);
+            SliderValueChanged?.Invoke(this, trackBar1.Value, false);
         }
 
 

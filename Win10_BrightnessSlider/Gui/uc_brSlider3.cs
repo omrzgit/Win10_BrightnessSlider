@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -79,7 +79,22 @@ namespace Win10_BrightnessSlider
 
         bool _isMouseDown { get; set; } = false;
         private void TrackBar1_MouseDown(object sender, MouseEventArgs e) => _isMouseDown = true;
-        private void TrackBar1_MouseUp(object sender, MouseEventArgs e) => _isMouseDown = false;
+        private void TrackBar1_MouseUp(object sender, MouseEventArgs e)
+        {
+            _isMouseDown = false;
+            SliderValueChanged?.Invoke(this, (int)trackBar1.Value, false);
+        }
+
+        public int CurrentValue => (int)trackBar1.Value;
+        public event Action<Iuc_brSlider, int, bool> SliderValueChanged;
+
+        public void SetSliderValue(int value, bool isMouseDown)
+        {
+            var safevalue = (int)MathFn.Clamp(value, trackBar1.Minimum, trackBar1.Maximum);
+            trackBar1.Value = safevalue;
+            lbl_value.Text = safevalue + "";
+            riScreen.SetBrightness(safevalue, isMouseDown);
+        }
 
         private void TrackBar1_MouseWheel(object sender, MouseEventArgs e)
         {
@@ -95,6 +110,7 @@ namespace Win10_BrightnessSlider
             {
                 lbl_value.Text = val + "";
             }
+            SliderValueChanged?.Invoke(this, (int)safevalue, _isMouseDown);
         }
 
         // value 0 to 100, REQUİRES GUİ - made these 3 for mouse hover on notify-rect
@@ -112,11 +128,13 @@ namespace Win10_BrightnessSlider
         {
             var newValue = trackBar1.Value + trackBar1.SmallChange;
             Slider_SetBrightness((int)newValue);
+            SliderValueChanged?.Invoke(this, (int)trackBar1.Value, false);
         }
         public void Slider_SetBrightness_DOWN()
         {
             var newValue = trackBar1.Value - trackBar1.SmallChange;
             Slider_SetBrightness((int)newValue);
+            SliderValueChanged?.Invoke(this, (int)trackBar1.Value, false);
         }
 
      

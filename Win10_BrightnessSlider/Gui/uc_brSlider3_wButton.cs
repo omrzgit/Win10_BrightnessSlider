@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -23,6 +23,14 @@ namespace Win10_BrightnessSlider.Gui
         string Iuc_brSlider.NotifyIconText => _uc_brSlider3.NotifyIconText;
         void Iuc_brSlider.UpdateSliderControl() => _uc_brSlider3.UpdateSliderControl();
         void Iuc_brSlider.Set_MonitorName(string name) => _uc_brSlider3.Set_MonitorName(name);
+
+        int Iuc_brSlider.CurrentValue => ((Iuc_brSlider)_uc_brSlider3).CurrentValue;
+        void Iuc_brSlider.SetSliderValue(int value, bool isMouseDown) => ((Iuc_brSlider)_uc_brSlider3).SetSliderValue(value, isMouseDown);
+        event Action<Iuc_brSlider, int, bool> Iuc_brSlider.SliderValueChanged
+        {
+            add => _uc_brSlider3.SliderValueChanged += value;
+            remove => _uc_brSlider3.SliderValueChanged -= value;
+        }
       
 
 
