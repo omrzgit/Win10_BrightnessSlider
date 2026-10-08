@@ -43,6 +43,11 @@ namespace Win10_BrightnessSlider
         public CustomTheme customTheme { get; set; } = new CustomTheme();
 
         public List<MonitorNames> monitorNames { get; set; }
+
+        public bool RememberWindowPosition { get; set; } = false;
+        public int WindowPositionX { get; set; } = 0;
+        public int WindowPositionY { get; set; } = 0;
+        public bool HasCustomWindowPosition { get; set; } = false;
     }
 
     public class MonitorNames

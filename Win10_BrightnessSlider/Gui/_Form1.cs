@@ -87,6 +87,10 @@ namespace Win10_BrightnessSlider
             this.StartPosition = FormStartPosition.Manual;
             this.Location = new Point(-this.Width, -this.Height);
 
+            SetupDraggableControl(this);
+            SetupDraggableControl(this.fLayPnl1);
+            this.fLayPnl1.Cursor = Cursors.SizeAll;
+
 			this.Shown += Form1_Shown;
 
             //Add_Wifi_Icon();
@@ -764,6 +768,10 @@ namespace Win10_BrightnessSlider
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
             ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
             EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
+            SetupDraggableControl(ucSldr);
+            SetupDraggableControl(ucSldr.pictureBox1);
+            SetupDraggableControl(ucSldr.label1);
+            ucSldr.pictureBox1.Cursor = Cursors.SizeAll;
             ucSldr.riScreen = riscrX;
             return ucSldr;
         }
@@ -796,6 +804,10 @@ namespace Win10_BrightnessSlider
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
             ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
             EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
+            SetupDraggableControl(ucSldr);
+            SetupDraggableControl(ucSldr.pictureBox1);
+            SetupDraggableControl(ucSldr.lbl_value);
+            ucSldr.pictureBox1.Cursor = Cursors.SizeAll;
 
             riscrX.onMonitorNameChanged += name => { ucSldr.Set_MonitorName(name); };
             //ucSldr.lbl_Name.Text = riscrX.TooltipText;
@@ -812,13 +824,10 @@ namespace Win10_BrightnessSlider
 
             var ucSldr = (uc_brSlider3)newSlider3_UC(riscrX);
             ucSldr_wb.SetGUIColors(BackColor1, TextColor1, BorderColor1, ucSldr);
+            SetupDraggableControl(ucSldr_wb);
             //ucSldr_wb._uc_brSlider3.Parent = this;
             this.Width = ucSldr_wb.Width;
-
-			
-
-
-			return ucSldr_wb;
+            return ucSldr_wb;
         }
         private Control newSlider3_buttonsOnly_UC(RichInfoScreen riscrX)
         {
@@ -848,6 +857,10 @@ namespace Win10_BrightnessSlider
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
             ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
             EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
+            SetupDraggableControl(ucSldr);
+            SetupDraggableControl(ucSldr.pictureBox1);
+            SetupDraggableControl(ucSldr.lbl_value);
+            ucSldr.pictureBox1.Cursor = Cursors.SizeAll;
 
             riscrX.onMonitorNameChanged += name => { ucSldr.Set_MonitorName(name); };
             //ucSldr.lbl_Name.Text = riscrX.TooltipText;
@@ -956,6 +969,76 @@ namespace Win10_BrightnessSlider
             scr.MonitorName = customName;
         }
 
+        private Point _dragMouseStart;
+        private Point _dragFormStart;
+        private bool _isDraggingWindow = false;
+        private ToolStripMenuItem mi_rememberPosition;
+
+        private void SetupDraggableControl(Control control)
+        {
+            if (control == null) return;
+            control.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    _isDraggingWindow = true;
+                    _dragMouseStart = Cursor.Position;
+                    _dragFormStart = this.Location;
+                }
+            };
+            control.MouseMove += (s, e) =>
+            {
+                if (_isDraggingWindow)
+                {
+                    int dx = Cursor.Position.X - _dragMouseStart.X;
+                    int dy = Cursor.Position.Y - _dragMouseStart.Y;
+                    this.Location = new Point(_dragFormStart.X + dx, _dragFormStart.Y + dy);
+                }
+            };
+            control.MouseUp += (s, e) =>
+            {
+                if (_isDraggingWindow)
+                {
+                    _isDraggingWindow = false;
+                    int dx = Math.Abs(Cursor.Position.X - _dragMouseStart.X);
+                    int dy = Math.Abs(Cursor.Position.Y - _dragMouseStart.Y);
+                    if (dx > 3 || dy > 3)
+                    {
+                        OnFormDragFinished();
+                    }
+                }
+            };
+        }
+
+        private void OnFormDragFinished()
+        {
+            var st = Settings_json.Get();
+            st.RememberWindowPosition = true;
+            st.HasCustomWindowPosition = true;
+            st.WindowPositionX = this.Location.X;
+            st.WindowPositionY = this.Location.Y;
+            st.SaveTo_JsonFile();
+            if (mi_rememberPosition != null)
+                mi_rememberPosition.Checked = true;
+        }
+
+        private Point GetWindowLocation()
+        {
+            var st = Settings_json.Get();
+            if (st.RememberWindowPosition && st.HasCustomWindowPosition)
+            {
+                Point pt = new Point(st.WindowPositionX, st.WindowPositionY);
+                Rectangle currentRect = new Rectangle(pt, this.Size);
+                var screen = Screen.FromPoint(pt);
+                if (screen != null && screen.WorkingArea.IntersectsWith(currentRect))
+                {
+                    int x = Math.Max(screen.WorkingArea.Left, Math.Min(pt.X, screen.WorkingArea.Right - this.Width));
+                    int y = Math.Max(screen.WorkingArea.Top, Math.Min(pt.Y, screen.WorkingArea.Bottom - this.Height));
+                    return new Point(x, y);
+                }
+            }
+            return TaskBarLocationFn.GetSliderLocation(this.Size, isWindows11);
+        }
 
         void RestartApp_ifRamUsage_isBiggerThan(int maxAllowed_RamUsage = 150)
         {
@@ -1148,7 +1231,7 @@ namespace Win10_BrightnessSlider
 				this.StartPosition = FormStartPosition.Manual;
 
 				// One simple call handles Win10, Win11, Multi-Monitor, and Taskbar location
-				this.Location = TaskBarLocationFn.GetSliderLocation(this.Size, isWindows11);
+				this.Location = GetWindowLocation();
 
 				// Region for Rounded Corners (Win11 only)
 				this.Region = isWindows11 ? RoundBorders.GetRegion_ForRoundCorner(this.Size, 16) : null;
@@ -1186,6 +1269,9 @@ namespace Win10_BrightnessSlider
         }
         private void hide_Window_whenClickedOutside(Point _Location, bool isMsButtonDown)
         {
+            if (_isDraggingWindow)
+                return;
+
             //dont run , if clicked on tray icon.
             var notifyicon_Rect = NotifyIconHelpers.GetNotifyIconRectangle(notifyIcon_bright, true);
             var Is_mouseInside_NotifRect = notifyicon_Rect.Contains(_Location);
@@ -1225,6 +1311,8 @@ namespace Win10_BrightnessSlider
         DateTime deactivateTime;
         private void Form1_Deactivate(object sender, EventArgs e)
         {
+            if (_isDraggingWindow)
+                return;
 
             //dont deactive if mouse clicked on notif icon.
             if (Control.MouseButtons == MouseButtons.Left)//static msDown
@@ -1601,6 +1689,32 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(mi_change_everything_path);
                 mi_extras.DropDown.Items.Add("-");
                 mi_extras.DropDown.Items.Add(mi_runAtStartUp_admin);
+                mi_extras.DropDown.Items.Add("-");
+
+                mi_rememberPosition = new ToolStripMenuItem("Remember Menu Position") { CheckOnClick = true };
+                mi_rememberPosition.Checked = Settings_json.Get().RememberWindowPosition;
+                mi_rememberPosition.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.RememberWindowPosition = mi_rememberPosition.Checked;
+                    if (!st.RememberWindowPosition)
+                        st.HasCustomWindowPosition = false;
+                    st.SaveTo_JsonFile();
+                };
+
+                var mi_resetPosition = new ToolStripMenuItem("Reset Menu Position to Taskbar", null, (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.HasCustomWindowPosition = false;
+                    st.SaveTo_JsonFile();
+                    if (mi_rememberPosition != null)
+                        mi_rememberPosition.Checked = false;
+                    if (this.Visible)
+                        this.Location = TaskBarLocationFn.GetSliderLocation(this.Size, isWindows11);
+                });
+
+                mi_extras.DropDown.Items.Add(mi_rememberPosition);
+                mi_extras.DropDown.Items.Add(mi_resetPosition);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);
