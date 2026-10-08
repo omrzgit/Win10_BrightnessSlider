@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Drawing.Printing;
 using System.Globalization;
 using System.Linq;
@@ -32,6 +32,7 @@ namespace Win10_BrightnessSlider
         //public Style Style { get; set; } = Style.FollowSystem;
 
         public bool Hotkey_OpenEverything { get; set; } = false;
+        public string Everything_ExePath { get; set; } = @"C:\Program Files\Everything\Everything.exe";
         public bool MapCopilotKey { get; set; } = false;
         public bool Show_WifiIcon { get; set; } = false;
         public bool Show_PlusMinusButtons { get; set; } = false;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -1241,6 +1241,7 @@ namespace Win10_BrightnessSlider
 
             var mi0_exit = new ToolStripMenuItem("Exit", null, (snd, ev) => { Application.Exit(); });
             var mi0_restart = new ToolStripMenuItem("Restart", null, (snd, ev) => { Application.Restart(); });
+            var mi0_restart_admin = new ToolStripMenuItem(AdminHelper.IsRunningAsAdmin() ? "Restart as Admin (Active)" : "Restart as Admin", null, (snd, ev) => { AdminHelper.RestartAsAdmin(); });
 
             var mi1_aboutMe = new ToolStripMenuItem($"About Me - (v{version})", null, (snd, ev) =>
             {
@@ -1324,6 +1325,12 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
 
                 //Settings_litedb.Update(st => { st.MapCopilotKey = _mix.Checked; });
                 Settings_json.Update(st => { st.Hotkey_OpenEverything = _mix.Checked; });
+            };
+
+            var mi_change_everything_path = new ToolStripMenuItem("Change Everything.exe Location...");
+            mi_change_everything_path.Click += (snd, ev) =>
+            {
+                EverythingManager.RelocateAndLinkEverything(isManualConfig: true);
             };
 
             //---way1---doesnt work-- registering two same keys deletes previous one.
@@ -1456,6 +1463,7 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(new ToolStripMenuItem("___ReMap Keys___") { Enabled = false });
                 mi_extras.DropDown.Items.Add(mi_remapKey1);
                 mi_extras.DropDown.Items.Add(mi_hotkey_everything);
+                mi_extras.DropDown.Items.Add(mi_change_everything_path);
                 //mi_extras.DropDown.Items.Add("-");
             }
             cms.Items.Add(mi_wifiToggle);
@@ -1464,6 +1472,7 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
             cms.Items.Add("-");
             cms.Items.Add(mi_darkMode);
             cms.Items.Add(mi0_restart);
+            cms.Items.Add(mi0_restart_admin);
             cms.Items.Add(mi0_exit);
 
 
@@ -2013,31 +2022,15 @@ echo.
            
             try
             {
-                var ps = ProcessStart(@"C:\Program Files\Everything\Everything.exe");
+                string exePath = EverythingManager.ResolveExecutablePath();
+                if (!string.IsNullOrWhiteSpace(exePath))
+                {
+                    ProcessStart(exePath);
+                }
             }
             catch (Exception ex)
             {
-                try
-                {
-                    var ps = ProcessStart(@"D:\Downloads\programs\_Everything-1.4.1.1026.x64\everything.exe");
-                }
-                catch (Exception ex2)
-                {
-
-                    MessageBox.Show(
-$@"Error:
-
-you need to install everything to  default path: 
-C:\Program Files\Everything\Everything.exe
-
-
-Error Message: 
-
-  {ex2.Message}
-
-" );
-                }
-               
+                MessageBox.Show($"Failed to run Everything.exe:\r\n\r\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
 
