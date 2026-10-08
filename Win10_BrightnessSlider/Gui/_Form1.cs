@@ -375,7 +375,13 @@ namespace Win10_BrightnessSlider
                 if (foundMon != null)
                 {
                     if (!string.IsNullOrWhiteSpace(foundMon.MonitorName))
-                        this.Invoke((Action)delegate { riScr.MonitorName = foundMon.MonitorName; });
+                    {
+                        Action apply = () => { riScr.MonitorName = foundMon.MonitorName; };
+                        if (this.IsHandleCreated && this.InvokeRequired)
+                            this.Invoke(apply);
+                        else
+                            apply();
+                    }
 
                     continue;
                 }
@@ -388,7 +394,13 @@ namespace Win10_BrightnessSlider
                 if (foundMondc != null)
                 {
                     if (!string.IsNullOrWhiteSpace(foundMondc.MonitorName))
-                        riScr.MonitorName = foundMondc.MonitorName;
+                    {
+                        Action apply = () => { riScr.MonitorName = foundMondc.MonitorName; };
+                        if (this.IsHandleCreated && this.InvokeRequired)
+                            this.Invoke(apply);
+                        else
+                            apply();
+                    }
 
                     continue;
                 }
@@ -750,8 +762,8 @@ namespace Win10_BrightnessSlider
 
 
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
-            ucSldr.lbl_Name.Text = riscrX.avail_MonitorName;
-            //ucSldr.lbl_Name.Text = riscrX.TooltipText;
+            ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
+            EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
             ucSldr.riScreen = riscrX;
             return ucSldr;
         }
@@ -783,6 +795,7 @@ namespace Win10_BrightnessSlider
 
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
             ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
+            EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
 
             riscrX.onMonitorNameChanged += name => { ucSldr.Set_MonitorName(name); };
             //ucSldr.lbl_Name.Text = riscrX.TooltipText;
@@ -834,6 +847,7 @@ namespace Win10_BrightnessSlider
 
             HelperFn.SetTooltip(ucSldr.pictureBox1, riscrX.TooltipText, riscrX.avail_MonitorName);
             ucSldr.lbl_Name.Text = riscrX.avail_MonitorName_clean;
+            EnableInlineRenaming(ucSldr.lbl_Name, riscrX);
 
             riscrX.onMonitorNameChanged += name => { ucSldr.Set_MonitorName(name); };
             //ucSldr.lbl_Name.Text = riscrX.TooltipText;
@@ -846,6 +860,100 @@ namespace Win10_BrightnessSlider
             this.Width = ucSldr.Width;
 
             return ucSldr;
+        }
+
+        private void EnableInlineRenaming(Label lbl, RichInfoScreen riScreen)
+        {
+            lbl.Cursor = Cursors.IBeam;
+            HelperFn.SetTooltip(lbl, "Click to rename monitor", riScreen.avail_MonitorName);
+            lbl.Click += (s, e) =>
+            {
+                if (lbl.Parent == null || riScreen == null) return;
+
+                var txt = new TextBox
+                {
+                    Font = lbl.Font,
+                    Text = riScreen.avail_MonitorName_clean,
+                    Location = lbl.Location,
+                    Size = new Size(Math.Max(lbl.Width + 30, 160), lbl.Height + 4),
+                    BackColor = lbl.Parent.BackColor,
+                    ForeColor = lbl.ForeColor,
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+
+                lbl.Visible = false;
+                lbl.Parent.Controls.Add(txt);
+                txt.BringToFront();
+                txt.Focus();
+                txt.SelectAll();
+
+                bool committed = false;
+                void Commit(bool save)
+                {
+                    if (committed) return;
+                    committed = true;
+
+                    if (save)
+                    {
+                        string newName = txt.Text.Trim();
+                        SaveMonitorName(riScreen, newName);
+                        lbl.Text = riScreen.avail_MonitorName_clean;
+                    }
+
+                    lbl.Visible = true;
+                    lbl.Parent?.Controls.Remove(txt);
+                    txt.Dispose();
+                }
+
+                txt.KeyDown += (ts, ke) =>
+                {
+                    if (ke.KeyCode == Keys.Enter)
+                    {
+                        ke.SuppressKeyPress = true;
+                        Commit(true);
+                    }
+                    else if (ke.KeyCode == Keys.Escape)
+                    {
+                        ke.SuppressKeyPress = true;
+                        Commit(false);
+                    }
+                };
+
+                txt.LostFocus += (ts, fe) => Commit(true);
+            };
+        }
+
+        private void SaveMonitorName(RichInfoScreen scr, string customName)
+        {
+            var settings = Settings_json.Get();
+            if (settings.monitorNames == null)
+                settings.monitorNames = new List<MonitorNames>();
+
+            string wmi = scr.WMIMonitorID?.InstanceName;
+            string dc = scr.dc_TargetDeviceName?.monitorDevicePath;
+
+            MonitorNames found = null;
+            if (!string.IsNullOrWhiteSpace(wmi))
+                found = settings.monitorNames.FirstOrDefault(x => x.wmi_InstanceName == wmi);
+            if (found == null && !string.IsNullOrWhiteSpace(dc))
+                found = settings.monitorNames.FirstOrDefault(x => x.dc_monitorDevicePath == dc);
+
+            if (found != null)
+            {
+                found.MonitorName = customName;
+            }
+            else
+            {
+                settings.monitorNames.Add(new MonitorNames
+                {
+                    MonitorName = customName,
+                    wmi_InstanceName = wmi,
+                    dc_monitorDevicePath = dc
+                });
+            }
+
+            settings.SaveTo_JsonFile();
+            scr.MonitorName = customName;
         }
 
 

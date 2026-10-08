@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -108,6 +108,9 @@ namespace Win10_BrightnessSlider
         {
             get
             {
+                if (!string.IsNullOrWhiteSpace(_monitorName))
+                    return _monitorName;
+
                 try
                 {
                     if (WMIMonitorID?.InstanceName != null)
@@ -146,6 +149,19 @@ namespace Win10_BrightnessSlider
         {
             get
             {
+                if (!string.IsNullOrWhiteSpace(_monitorName))
+                    return _monitorName;
+
+                return HardwareName;
+            }
+
+            set { avail_MonitorName = value; }
+        }
+
+        public string HardwareName
+        {
+            get
+            {
                 try
                 {
                     if (WMIMonitorID?.InstanceName != null)
@@ -174,11 +190,7 @@ namespace Win10_BrightnessSlider
                     RamLogger.Log(ex + "");
                     return "Ex:" + ex;
                 }
-
             }
-
-            set { avail_MonitorName = value; }
-
         }
 
 
