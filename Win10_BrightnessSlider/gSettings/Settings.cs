@@ -49,7 +49,8 @@ namespace Win10_BrightnessSlider
         public int WindowPositionY { get; set; } = 0;
         public bool HasCustomWindowPosition { get; set; } = false;
 
-        public bool RestoreBrightnessOnStartup { get; set; } = false;
+        public bool RememberLastBrightness { get; set; } = false;
+        public bool RestoreBrightnessOnStartup { get => RememberLastBrightness; set => RememberLastBrightness = value; }
     }
 
     public class MonitorNames

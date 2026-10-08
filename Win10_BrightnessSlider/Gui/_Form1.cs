@@ -1750,13 +1750,13 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(mi_resetPosition);
                 mi_extras.DropDown.Items.Add("-");
 
-                var mi_restoreBrightness = new ToolStripMenuItem("Restore Brightness on Startup") { CheckOnClick = true };
-                mi_restoreBrightness.Checked = Settings_json.Get().RestoreBrightnessOnStartup;
+                var mi_restoreBrightness = new ToolStripMenuItem("Remember last brightness value") { CheckOnClick = true };
+                mi_restoreBrightness.Checked = Settings_json.Get().RememberLastBrightness;
                 mi_restoreBrightness.Click += (s, e) =>
                 {
                     var st = Settings_json.Get();
-                    st.RestoreBrightnessOnStartup = mi_restoreBrightness.Checked;
-                    if (st.RestoreBrightnessOnStartup && riScreens != null)
+                    st.RememberLastBrightness = mi_restoreBrightness.Checked;
+                    if (st.RememberLastBrightness && riScreens != null)
                     {
                         foreach (var scr in riScreens)
                         {
@@ -1764,6 +1764,11 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                             if (cur >= 0)
                                 RichInfoScreen.SaveMonitorBrightness(scr, cur);
                         }
+                    }
+                    else if (!st.RememberLastBrightness && st.monitorNames != null)
+                    {
+                        foreach (var m in st.monitorNames)
+                            m.SavedBrightness = null;
                     }
                     st.SaveTo_JsonFile();
                 };
