@@ -908,16 +908,19 @@ namespace Win10_BrightnessSlider
         {
             //get current states
             var isRunSttup = HelperFn.isRunAtStartup();
+            var isAdminStartup = TaskSchedulerHelper.IsAdminStartupEnabled();
 
             var itemx = notifyIcon_bright_ContextMenuStrip?.Items?
-                .OfType<ToolStripMenuItem>().Where(x => x.Text.StartsWith("Run At Startup")).FirstOrDefault();
-
+                .OfType<ToolStripMenuItem>().FirstOrDefault(x => x.Text == "Run At Startup");
             if (itemx != null)
                 itemx.Checked = isRunSttup;
 
-            //notifyIcon_bright.ContextMenuStrip.Items
-            //    .OfType<ToolStripMenuItem>().Where(x => x.Text == "Run At Startup").FirstOrDefault()
-            //    .Checked = isRunSttup;
+            var itemAdmin = notifyIcon_bright_ContextMenuStrip?.Items?
+                .OfType<ToolStripMenuItem>()
+                .SelectMany(x => x.DropDownItems.OfType<ToolStripMenuItem>().Concat(new[] { x }))
+                .FirstOrDefault(x => x.Text == "Run At Startup (as Admin)");
+            if (itemAdmin != null)
+                itemAdmin.Checked = isAdminStartup;
         }
         public void GUI_Update__AllSliderControls()
         {
@@ -1270,12 +1273,36 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
             });
 
             var mi_rescanMon = new ToolStripMenuItem("Detect Monitors", null, (snd, ev) => { RePopulateSliders(); });
-            var mi_runAtStartUp = new ToolStripMenuItem("Run At Startup", null, (snd, ev) =>
+            var mi_runAtStartUp = new ToolStripMenuItem("Run At Startup");
+            var mi_runAtStartUp_admin = new ToolStripMenuItem("Run At Startup (as Admin)");
+
+            mi_runAtStartUp.Click += (snd, ev) =>
             {
                 var _mi = snd as ToolStripMenuItem;
                 _mi.Checked = !_mi.Checked; // toggle
                 HelperFn.SetStartup(_mi.Checked);
-            });
+                if (_mi.Checked)
+                {
+                    TaskSchedulerHelper.SetAdminStartup(false);
+                    mi_runAtStartUp_admin.Checked = false;
+                }
+            };
+
+            mi_runAtStartUp_admin.Click += (snd, ev) =>
+            {
+                var _mi = snd as ToolStripMenuItem;
+                bool targetState = !_mi.Checked;
+                bool success = TaskSchedulerHelper.SetAdminStartup(targetState);
+                if (success)
+                {
+                    _mi.Checked = targetState;
+                    if (targetState)
+                    {
+                        HelperFn.SetStartup(false);
+                        mi_runAtStartUp.Checked = false;
+                    }
+                }
+            };
 
 
 
@@ -1464,15 +1491,16 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(mi_remapKey1);
                 mi_extras.DropDown.Items.Add(mi_hotkey_everything);
                 mi_extras.DropDown.Items.Add(mi_change_everything_path);
-                //mi_extras.DropDown.Items.Add("-");
+                mi_extras.DropDown.Items.Add("-");
+                mi_extras.DropDown.Items.Add(mi_runAtStartUp_admin);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);
 
             cms.Items.Add("-");
             cms.Items.Add(mi_darkMode);
-            cms.Items.Add(mi0_restart);
             cms.Items.Add(mi0_restart_admin);
+            cms.Items.Add(mi0_restart);
             cms.Items.Add(mi0_exit);
 
 
