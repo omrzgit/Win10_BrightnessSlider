@@ -270,6 +270,7 @@ namespace Win10_BrightnessSlider
             //GUI_Update_StatesOnControls(); //also set CtxMenu Run At StartUp
 
             notifyIcon_bright.Text = "Win10_BrightnessSlider";
+            InitEnforceBrightnessTimer();
         }
 
 		private void Form1_Shown(object sender, EventArgs e)
@@ -1190,6 +1191,152 @@ namespace Win10_BrightnessSlider
             return bmp;
         }
 
+        private System.Windows.Forms.Timer _timerEnforceBrightness;
+        private bool _isEnforcingBrightness = false;
+        private ToolStripMenuItem mi_reapplyBrightness;
+        private ToolStripMenuItem mi_reapply_disabled;
+        private ToolStripMenuItem mi_reapply_500ms;
+        private ToolStripMenuItem mi_reapply_1s;
+        private ToolStripMenuItem mi_reapply_5s;
+        private ToolStripMenuItem mi_reapply_10s;
+        private ToolStripMenuItem mi_reapply_30s;
+        private ToolStripMenuItem mi_reapply_60s;
+        private ToolStripMenuItem mi_reapply_custom;
+
+        private void InitEnforceBrightnessTimer()
+        {
+            try
+            {
+                var st = Settings_json.Get();
+                if (_timerEnforceBrightness == null)
+                {
+                    _timerEnforceBrightness = new System.Windows.Forms.Timer();
+                    _timerEnforceBrightness.Tick += TimerEnforceBrightness_Tick;
+                }
+                _timerEnforceBrightness.Stop();
+                if (st.ReapplyBrightnessPeriodically && st.ReapplyBrightnessIntervalMs >= 100)
+                {
+                    _timerEnforceBrightness.Interval = Math.Max(100, st.ReapplyBrightnessIntervalMs);
+                    _timerEnforceBrightness.Start();
+                }
+            }
+            catch (Exception ex)
+            {
+                RamLogger.Log("InitEnforceBrightnessTimer error: " + ex);
+            }
+        }
+
+        private void TimerEnforceBrightness_Tick(object sender, EventArgs e)
+        {
+            if (_isEnforcingBrightness || _isSyncingSliders || riScreens == null || riScreens.Count == 0)
+                return;
+
+            if (Control.MouseButtons != MouseButtons.None)
+                return;
+
+            var st = Settings_json.Get();
+            if (!st.ReapplyBrightnessPeriodically)
+            {
+                _timerEnforceBrightness?.Stop();
+                return;
+            }
+
+            _isEnforcingBrightness = true;
+            Task.Run(() =>
+            {
+                try
+                {
+                    bool anyChanged = false;
+                    foreach (var scr in riScreens)
+                    {
+                        if (scr == null) continue;
+
+                        string wmi = scr.WMIMonitorID?.InstanceName;
+                        string dc = scr.dc_TargetDeviceName?.monitorDevicePath;
+
+                        int target = -1;
+                        var bi = RicInfoScreenHolder.BriInfoLi.FirstOrDefault(x =>
+                            (!string.IsNullOrEmpty(dc) && x.user32dc_DevicePath == dc) ||
+                            (!string.IsNullOrEmpty(wmi) && x.wmi_InstanceName == wmi));
+
+                        if (bi != null && bi.Brightness >= 0)
+                        {
+                            target = bi.Brightness;
+                        }
+                        else if (st.monitorNames != null)
+                        {
+                            var mon = st.monitorNames.FirstOrDefault(x =>
+                                (!string.IsNullOrEmpty(wmi) && x.wmi_InstanceName == wmi) ||
+                                (!string.IsNullOrEmpty(dc) && x.dc_monitorDevicePath == dc));
+                            if (mon != null && mon.SavedBrightness.HasValue)
+                                target = mon.SavedBrightness.Value;
+                        }
+
+                        if (target < 0)
+                        {
+                            target = scr.GetBrightness();
+                            if (target >= 0)
+                            {
+                                RicInfoScreenHolder.RememberBrightness(scr, target);
+                            }
+                        }
+
+                        if (target >= 0 && target <= 100)
+                        {
+                            int current = scr.GetBrightness();
+                            if (current == -1 || current != target)
+                            {
+                                scr.SetBrightness(target, false);
+                                anyChanged = true;
+                            }
+                        }
+                    }
+
+                    if (anyChanged)
+                    {
+                        if (this.IsHandleCreated && !this.IsDisposed)
+                        {
+                            this.BeginInvoke((Action)delegate
+                            {
+                                if (Visible)
+                                    GUI_Update__StatesOnControls();
+                                else
+                                    Update_NotifyIconText_viaRiScreen();
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RamLogger.Log("TimerEnforceBrightness error: " + ex);
+                }
+                finally
+                {
+                    _isEnforcingBrightness = false;
+                }
+            });
+        }
+
+        private void UpdateReapplyBrightnessMenu()
+        {
+            if (mi_reapply_disabled == null) return;
+            var st = Settings_json.Get();
+            bool enabled = st.ReapplyBrightnessPeriodically;
+            int ms = st.ReapplyBrightnessIntervalMs;
+
+            mi_reapply_disabled.Checked = !enabled;
+            mi_reapply_500ms.Checked = enabled && ms == 500;
+            mi_reapply_1s.Checked = enabled && ms == 1000;
+            mi_reapply_5s.Checked = enabled && ms == 5000;
+            mi_reapply_10s.Checked = enabled && ms == 10000;
+            mi_reapply_30s.Checked = enabled && ms == 30000;
+            mi_reapply_60s.Checked = enabled && ms == 60000;
+
+            bool isPreset = (ms == 500 || ms == 1000 || ms == 5000 || ms == 10000 || ms == 30000 || ms == 60000);
+            mi_reapply_custom.Checked = enabled && !isPreset;
+            mi_reapply_custom.Text = (enabled && !isPreset) ? $"Custom ({ms} ms)..." : "Custom Interval (ms)...";
+        }
+
         void RestartApp_ifRamUsage_isBiggerThan(int maxAllowed_RamUsage = 150)
         {
             // ram fix. to be added on v..19
@@ -1911,6 +2058,105 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                     UpdateLinkSlidersUI();
                 };
                 mi_extras.DropDown.Items.Add(mi_linkSliders);
+
+                mi_reapplyBrightness = new ToolStripMenuItem("Reapply Brightness Periodically");
+                mi_reapplyBrightness.DropDown.ApplyRoundCorners(true);
+
+                mi_reapply_disabled = new ToolStripMenuItem("Disabled", null, (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.ReapplyBrightnessPeriodically = false;
+                    st.SaveTo_JsonFile();
+                    InitEnforceBrightnessTimer();
+                    UpdateReapplyBrightnessMenu();
+                });
+
+                Action<int> setReapplyPreset = (intervalMs) =>
+                {
+                    var st = Settings_json.Get();
+                    st.ReapplyBrightnessPeriodically = true;
+                    st.ReapplyBrightnessIntervalMs = intervalMs;
+                    st.SaveTo_JsonFile();
+                    InitEnforceBrightnessTimer();
+                    UpdateReapplyBrightnessMenu();
+                };
+
+                mi_reapply_500ms = new ToolStripMenuItem("Every 500 ms (Fastest / High CPU)", null, (s, e) => setReapplyPreset(500));
+                mi_reapply_1s = new ToolStripMenuItem("Every 1 second", null, (s, e) => setReapplyPreset(1000));
+                mi_reapply_5s = new ToolStripMenuItem("Every 5 seconds", null, (s, e) => setReapplyPreset(5000));
+                mi_reapply_10s = new ToolStripMenuItem("Every 10 seconds", null, (s, e) => setReapplyPreset(10000));
+                mi_reapply_30s = new ToolStripMenuItem("Every 30 seconds", null, (s, e) => setReapplyPreset(30000));
+                mi_reapply_60s = new ToolStripMenuItem("Every 60 seconds", null, (s, e) => setReapplyPreset(60000));
+
+                mi_reapply_custom = new ToolStripMenuItem("Custom Interval (ms)...", null, (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    using (var prompt = new Form())
+                    {
+                        prompt.Width = 340;
+                        prompt.Height = 165;
+                        prompt.FormBorderStyle = FormBorderStyle.FixedDialog;
+                        prompt.Text = "Custom Reapply Interval";
+                        prompt.StartPosition = FormStartPosition.CenterScreen;
+                        prompt.MaximizeBox = false;
+                        prompt.MinimizeBox = false;
+                        prompt.ShowInTaskbar = false;
+                        prompt.TopMost = true;
+
+                        var lbl = new Label() { Left = 20, Top = 15, Width = 285, Text = "Enter interval in milliseconds (min 500 ms):" };
+                        var txt = new TextBox() { Left = 20, Top = 42, Width = 285, Text = st.ReapplyBrightnessIntervalMs.ToString() };
+                        var btnOk = new Button() { Text = "OK", Left = 135, Width = 80, Top = 80, DialogResult = DialogResult.OK };
+                        var btnCancel = new Button() { Text = "Cancel", Left = 225, Width = 80, Top = 80, DialogResult = DialogResult.Cancel };
+                        prompt.Controls.Add(lbl);
+                        prompt.Controls.Add(txt);
+                        prompt.Controls.Add(btnOk);
+                        prompt.Controls.Add(btnCancel);
+                        prompt.AcceptButton = btnOk;
+                        prompt.CancelButton = btnCancel;
+
+                        if (prompt.ShowDialog(this) == DialogResult.OK)
+                        {
+                            string input = txt.Text.Trim();
+                            int ms = 0;
+                            if (int.TryParse(input, out int parsedInt))
+                            {
+                                ms = parsedInt;
+                            }
+                            else if (double.TryParse(input, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedDouble))
+                            {
+                                ms = (int)(parsedDouble * 1000);
+                            }
+
+                            if (ms > 0)
+                            {
+                                if (ms < 500)
+                                {
+                                    MessageBox.Show("For hardware safety and to prevent monitor bus locking, the minimum interval is clamped to 500 ms.", "Hardware Safety Limit", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                    ms = 500;
+                                }
+                                st.ReapplyBrightnessPeriodically = true;
+                                st.ReapplyBrightnessIntervalMs = ms;
+                                st.SaveTo_JsonFile();
+                                InitEnforceBrightnessTimer();
+                                UpdateReapplyBrightnessMenu();
+                            }
+                        }
+                    }
+                });
+
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_disabled);
+                mi_reapplyBrightness.DropDownItems.Add("-");
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_500ms);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_1s);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_5s);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_10s);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_30s);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_60s);
+                mi_reapplyBrightness.DropDownItems.Add("-");
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_custom);
+
+                UpdateReapplyBrightnessMenu();
+                mi_extras.DropDown.Items.Add(mi_reapplyBrightness);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -128,12 +128,20 @@ namespace Win10_BrightnessSlider
             //submenu text color fix 
             foreach (ToolStripMenuItem item in itemsWithDD)
             {
-                if (item.DropDown != null)
-                {
-                    item.DropDown.ForeColor = cmsColors.textColor;
-                    item.DropDown.BackColor = cmsColors.backColor;
-                }
+                ApplyDropDownColorsRecursive(item, cmsColors);
+            }
+        }
 
+        private static void ApplyDropDownColorsRecursive(ToolStripMenuItem item, CMS_colors cmsColors)
+        {
+            if (item?.DropDown != null)
+            {
+                item.DropDown.ForeColor = cmsColors.textColor;
+                item.DropDown.BackColor = cmsColors.backColor;
+                foreach (ToolStripMenuItem sub in item.DropDown.Items.OfType<ToolStripMenuItem>().Where(x => x.HasDropDownItems))
+                {
+                    ApplyDropDownColorsRecursive(sub, cmsColors);
+                }
             }
         }
 

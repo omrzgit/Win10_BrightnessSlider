@@ -54,6 +54,8 @@ namespace Win10_BrightnessSlider
 
         public bool MouseWheelChangesAllScreens { get; set; } = false;
         public bool LinkSliders { get; set; } = false;
+        public bool ReapplyBrightnessPeriodically { get; set; } = false;
+        public int ReapplyBrightnessIntervalMs { get; set; } = 30000;
     }
 
     public class MonitorNames
