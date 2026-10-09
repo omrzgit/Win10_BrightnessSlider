@@ -61,6 +61,12 @@ namespace Win10_BrightnessSlider
         public int ScreenFilter_Opacity { get; set; } = 30;
         public int ScreenFilter_ColorArgb { get; set; } = unchecked((int)0xFF000000);
 
+        public bool Hotkey_Brightness_Enabled { get; set; } = true;
+        public string Hotkey_BrightnessUp { get; set; } = "Control+Alt+Up";
+        public string Hotkey_BrightnessDown { get; set; } = "Control+Alt+Down";
+        public int Hotkey_BrightnessStep { get; set; } = 5;
+        public bool Hotkey_ChangesAllScreens { get; set; } = false;
+
         [JsonIgnore]
         public Color ScreenFilter_Color
         {

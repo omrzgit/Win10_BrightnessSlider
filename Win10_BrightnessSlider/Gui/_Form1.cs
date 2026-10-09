@@ -75,8 +75,11 @@ namespace Win10_BrightnessSlider
 		*/
 		static string version = "1.8.31";
 
+		public static Form1 Instance { get; private set; }
+
 		public Form1()
         {
+            Instance = this;
             InitializeComponent();
             DoubleBuffered = true;
 
@@ -95,6 +98,7 @@ namespace Win10_BrightnessSlider
             this.fLayPnl1.AutoScroll = false;
 
 			this.Shown += Form1_Shown;
+			this.FormClosed += (s, e) => BrightnessHotkeyManager.Shutdown();
 
             //Add_Wifi_Icon();
             //Remove_Wifi_Icon();
@@ -336,6 +340,7 @@ namespace Win10_BrightnessSlider
 
 
             //m_GlobalHook.init_remapKeys(true);
+            BrightnessHotkeyManager.Initialize();
 
             tbxLog_AppendText("\r\n wire_events - device power events ... ");
             //  -monitor plug unplug
@@ -533,6 +538,62 @@ namespace Win10_BrightnessSlider
                     }
                 });
             });
+        }
+
+        public void AdjustBrightnessByStep(int delta)
+        {
+            if (riScreens == null || riScreens.Count == 0)
+                return;
+
+            var st = Settings_json.Get();
+            bool linkAll = st.LinkSliders || st.Hotkey_ChangesAllScreens;
+
+            List<RichInfoScreen> targets;
+            if (linkAll || riScreens.Count == 1)
+            {
+                targets = riScreens;
+            }
+            else
+            {
+                var cursorScreen = Screen.FromPoint(Cursor.Position);
+                var matched = riScreens.FirstOrDefault(s => s.Screen != null && s.Screen.DeviceName == cursorScreen.DeviceName);
+                targets = new List<RichInfoScreen> { matched ?? riScreens.FirstOrDefault() };
+            }
+
+            foreach (var scr in targets)
+            {
+                if (scr == null) continue;
+                var currentVal = scr.GetBrightness();
+                var newVal = (int)MathFn.Clamp(currentVal + delta, 0, 100);
+                scr.SetBrightness(newVal, false);
+
+                if (st.RememberLastBrightness && st.monitorNames != null)
+                {
+                    string wmi = scr.WMIMonitorID?.InstanceName;
+                    string dc = scr.dc_TargetDeviceName?.monitorDevicePath;
+                    MonitorNames mon = null;
+                    if (!string.IsNullOrWhiteSpace(wmi))
+                        mon = st.monitorNames.FirstOrDefault(x => x.wmi_InstanceName == wmi);
+                    if (mon == null && !string.IsNullOrWhiteSpace(dc))
+                        mon = st.monitorNames.FirstOrDefault(x => x.dc_monitorDevicePath == dc);
+
+                    if (mon != null) mon.SavedBrightness = newVal;
+                }
+            }
+
+            if (st.RememberLastBrightness)
+            {
+                st.SaveTo_JsonFile();
+            }
+
+            if (Visible)
+            {
+                GUI_Update__StatesOnControls();
+            }
+            else
+            {
+                Update_NotifyIconText_viaRiScreen();
+            }
         }
 
 
@@ -1895,7 +1956,7 @@ namespace Win10_BrightnessSlider
 
             var cms = new ContextMenuStrip_win11();
 
-            var mi0_exit = new ToolStripMenuItem("Exit", null, (snd, ev) => { Application.Exit(); });
+            var mi0_exit = new ToolStripMenuItem("Exit", null, (snd, ev) => { BrightnessHotkeyManager.Shutdown(); Application.Exit(); });
             var mi0_restart = new ToolStripMenuItem("Restart", null, (snd, ev) => { Application.Restart(); });
             var mi0_restart_admin = new ToolStripMenuItem(AdminHelper.IsRunningAsAdmin() ? "Restart as Admin (Active)" : "Restart as Admin", null, (snd, ev) => { AdminHelper.RestartAsAdmin(); });
 
@@ -2422,6 +2483,102 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(mi_screenFilter);
                 mi_extras.DropDown.Items.Add(mi_filterColor);
                 mi_extras.DropDown.Items.Add(mi_resetFilterColor);
+
+                mi_extras.DropDown.Items.Add("-");
+                var mi_brightnessHotkeys = new ToolStripMenuItem("Global Brightness Hotkeys");
+                mi_brightnessHotkeys.DropDown.ApplyRoundCorners(true);
+
+                var mi_hotkeysToggle = new ToolStripMenuItem("Enable Hotkeys") { CheckOnClick = true };
+                var mi_hotkeyUpDisplay = new ToolStripMenuItem("Increase: " + BrightnessHotkeyManager.NormalizeDisplay(Settings_json.Get().Hotkey_BrightnessUp)) { Enabled = false };
+                var mi_hotkeyDownDisplay = new ToolStripMenuItem("Decrease: " + BrightnessHotkeyManager.NormalizeDisplay(Settings_json.Get().Hotkey_BrightnessDown)) { Enabled = false };
+                var mi_hotkeysConfigure = new ToolStripMenuItem("Change Hotkeys...");
+                var mi_hotkeysAllScreens = new ToolStripMenuItem("Hotkeys Change All Screens") { CheckOnClick = true };
+                var mi_hotkeysStep = new ToolStripMenuItem("Step Size");
+                int[] stepSizes = new int[] { 1, 2, 5, 10, 15, 20 };
+
+                Action updateStepChecks = () =>
+                {
+                    int currentStep = Settings_json.Get().Hotkey_BrightnessStep;
+                    foreach (ToolStripMenuItem item in mi_hotkeysStep.DropDownItems)
+                    {
+                        if (item.Tag is int s)
+                        {
+                            item.Checked = (s == currentStep);
+                        }
+                    }
+                };
+
+                foreach (int s in stepSizes)
+                {
+                    int capturedStep = s;
+                    var item = new ToolStripMenuItem(capturedStep + "%") { Tag = capturedStep };
+                    item.Click += (snd, ev) =>
+                    {
+                        Settings_json.Update(st => st.Hotkey_BrightnessStep = capturedStep);
+                        updateStepChecks();
+                    };
+                    mi_hotkeysStep.DropDownItems.Add(item);
+                }
+
+                var mi_resetHotkeys = new ToolStripMenuItem("Reset to Default (Ctrl+Alt+Up/Down)");
+
+                Action updateHotkeyMenuDisplays = () =>
+                {
+                    var st = Settings_json.Get();
+                    mi_hotkeysToggle.Checked = st.Hotkey_Brightness_Enabled;
+                    mi_hotkeyUpDisplay.Text = "Increase: " + BrightnessHotkeyManager.NormalizeDisplay(st.Hotkey_BrightnessUp);
+                    mi_hotkeyDownDisplay.Text = "Decrease: " + BrightnessHotkeyManager.NormalizeDisplay(st.Hotkey_BrightnessDown);
+                    mi_hotkeysAllScreens.Checked = st.Hotkey_ChangesAllScreens;
+                    updateStepChecks();
+                };
+
+                updateHotkeyMenuDisplays();
+
+                mi_hotkeysToggle.Click += (s, e) =>
+                {
+                    Settings_json.Update(st => st.Hotkey_Brightness_Enabled = mi_hotkeysToggle.Checked);
+                    BrightnessHotkeyManager.RegisterHotkeys();
+                    updateHotkeyMenuDisplays();
+                };
+
+                mi_hotkeysAllScreens.Click += (s, e) =>
+                {
+                    Settings_json.Update(st => st.Hotkey_ChangesAllScreens = mi_hotkeysAllScreens.Checked);
+                    updateHotkeyMenuDisplays();
+                };
+
+                mi_hotkeysConfigure.Click += (s, e) =>
+                {
+                    using (var dlg = new Form_HotkeyConfig())
+                    {
+                        dlg.ShowDialog();
+                        updateHotkeyMenuDisplays();
+                    }
+                };
+
+                mi_resetHotkeys.Click += (s, e) =>
+                {
+                    Settings_json.Update(st =>
+                    {
+                        st.Hotkey_BrightnessUp = "Control+Alt+Up";
+                        st.Hotkey_BrightnessDown = "Control+Alt+Down";
+                        st.Hotkey_BrightnessStep = 5;
+                    });
+                    BrightnessHotkeyManager.RegisterHotkeys();
+                    updateHotkeyMenuDisplays();
+                };
+
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeysToggle);
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeyUpDisplay);
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeyDownDisplay);
+                mi_brightnessHotkeys.DropDownItems.Add("-");
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeysConfigure);
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeysStep);
+                mi_brightnessHotkeys.DropDownItems.Add(mi_hotkeysAllScreens);
+                mi_brightnessHotkeys.DropDownItems.Add("-");
+                mi_brightnessHotkeys.DropDownItems.Add(mi_resetHotkeys);
+
+                mi_extras.DropDown.Items.Add(mi_brightnessHotkeys);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);
