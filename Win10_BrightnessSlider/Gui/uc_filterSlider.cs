@@ -7,11 +7,11 @@ namespace Win10_BrightnessSlider.Gui
 {
     public class uc_filterSlider : ThemedUserControl
     {
-        public PictureBox pictureBox1;
-        public Label lbl_Name;
+        public CheckBox chk_filter;
         public Panel pnl_color;
-        public Label lbl_value;
+        public PictureBox pictureBox1;
         public ColorSlider trackBar1;
+        public Label lbl_value;
 
         public uc_filterSlider()
         {
@@ -21,36 +21,40 @@ namespace Win10_BrightnessSlider.Gui
             this.Size = new Size(350, 73);
             this.Margin = Padding.Empty;
 
-            lbl_Name = new Label
+            var st = Settings_json.Get();
+
+            chk_filter = new CheckBox
             {
                 AutoSize = true,
                 Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point),
-                Location = new Point(14, 7),
+                Location = new Point(14, 6),
                 Text = "Screen Filter",
-                TextAlign = ContentAlignment.TopCenter
+                Cursor = Cursors.Hand,
+                Checked = st.ScreenFilter_Active
             };
 
             pnl_color = new Panel
             {
-                Size = new Size(14, 14),
-                Location = new Point(102, 8),
+                Size = new Size(15, 15),
+                Location = new Point(chk_filter.Right + 8, chk_filter.Top + 2),
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Settings_json.Get().ScreenFilter_Color,
+                BackColor = st.ScreenFilter_Color,
                 Cursor = Cursors.Hand
             };
             var tt = new ToolTip();
             tt.SetToolTip(pnl_color, "Filter Color (Click to change)");
+
             pnl_color.Click += (s, e) =>
             {
-                var st = Settings_json.Get();
+                var settings = Settings_json.Get();
                 using (var cd = new ColorDialog())
                 {
-                    cd.Color = st.ScreenFilter_Color;
+                    cd.Color = settings.ScreenFilter_Color;
                     cd.FullOpen = true;
                     if (cd.ShowDialog() == DialogResult.OK)
                     {
-                        st.ScreenFilter_Color = cd.Color;
-                        st.SaveTo_JsonFile();
+                        settings.ScreenFilter_Color = cd.Color;
+                        settings.SaveTo_JsonFile();
                         pnl_color.BackColor = cd.Color;
                         ScreenFilterManager.UpdateColor(cd.Color);
                     }
@@ -61,20 +65,28 @@ namespace Win10_BrightnessSlider.Gui
             {
                 Location = new Point(18, 30),
                 Size = new Size(20, 20),
-                SizeMode = PictureBoxSizeMode.Zoom
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Cursor = Cursors.Hand
+            };
+            tt.SetToolTip(pictureBox1, "Toggle Screen Filter");
+            pictureBox1.Click += (s, e) =>
+            {
+                chk_filter.Checked = !chk_filter.Checked;
             };
 
             trackBar1 = new ColorSlider
             {
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Location = new Point(45, 29),
+                Size = new Size(250, 23),
                 Minimum = 0,
                 Maximum = 100,
                 SmallChange = 5,
                 LargeChange = 0,
                 ShowDivisionsText = false,
                 ShowSmallScale = false,
-                BorderRoundRectSize = new Size(8, 8)
+                BorderRoundRectSize = new Size(8, 8),
+                Enabled = st.ScreenFilter_Active
             };
 
             lbl_value = new Label
@@ -83,19 +95,46 @@ namespace Win10_BrightnessSlider.Gui
                 AutoSize = true,
                 Font = new Font("Segoe UI", 13.8F, FontStyle.Regular, GraphicsUnit.Point),
                 Location = new Point(300, 26),
-                Text = "00%",
+                Text = st.ScreenFilter_Opacity + "%",
                 TextAlign = ContentAlignment.TopCenter
             };
 
-            this.Controls.Add(lbl_Name);
+            this.Controls.Add(chk_filter);
             this.Controls.Add(pnl_color);
             this.Controls.Add(pictureBox1);
             this.Controls.Add(trackBar1);
             this.Controls.Add(lbl_value);
 
+            chk_filter.CheckedChanged += (s, e) =>
+            {
+                var settings = Settings_json.Get();
+                settings.ScreenFilter_Active = chk_filter.Checked;
+                settings.SaveTo_JsonFile();
+
+                trackBar1.Enabled = chk_filter.Checked;
+                trackBar1.Invalidate();
+
+                if (chk_filter.Checked)
+                {
+                    ScreenFilterManager.ApplyFilter();
+                }
+                else
+                {
+                    ScreenFilterManager.CloseAll();
+                }
+            };
+
             trackBar1.Scroll += TrackBar1_Scroll;
             trackBar1.MouseUp += TrackBar1_MouseUp;
             trackBar1.MouseWheel += TrackBar1_MouseWheel;
+
+            this.Layout += (s, e) =>
+            {
+                if (chk_filter != null && pnl_color != null)
+                {
+                    pnl_color.Location = new Point(chk_filter.Right + 8, chk_filter.Top + 2);
+                }
+            };
         }
 
         private void TrackBar1_Scroll(object sender, EventArgs e)
@@ -115,6 +154,7 @@ namespace Win10_BrightnessSlider.Gui
 
         private void TrackBar1_MouseWheel(object sender, MouseEventArgs e)
         {
+            if (!trackBar1.Enabled) return;
             int current = (int)trackBar1.Value;
             int step = e.Delta > 0 ? 5 : -5;
             int newVal = (int)MathFn.Clamp(current + step, 0, 100);
@@ -131,7 +171,8 @@ namespace Win10_BrightnessSlider.Gui
         {
             this.BackColor = backColor;
             this.FrameColor = borderColor;
-            lbl_Name.ForeColor = textColor;
+            chk_filter.ForeColor = textColor;
+            chk_filter.BackColor = backColor;
             lbl_value.ForeColor = textColor;
 
             trackBar1 = ColorSliderFn.setStyle_win10_trackbarColor_v2(trackBar1, settings_forTheme);
@@ -169,8 +210,8 @@ namespace Win10_BrightnessSlider.Gui
                 {
                     using (var path = new GraphicsPath())
                     {
-                        path.AddArc(2, 2, 16, 16, 70, 240);
-                        path.AddArc(6, 2, 13, 16, 310, -200);
+                        path.AddArc(2, 2, 16, 16, 75, 220);
+                        path.AddArc(5, 2, 12, 16, 295, -170);
                         path.CloseFigure();
                         g.FillPath(brush, path);
                     }

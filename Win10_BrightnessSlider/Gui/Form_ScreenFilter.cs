@@ -97,7 +97,8 @@ namespace Win10_BrightnessSlider.Gui
         public static void ApplyFilter()
         {
             var st = Settings_json.Get();
-            ApplyFilter(st.ScreenFilter_Enabled, st.ScreenFilter_Opacity, st.ScreenFilter_Color);
+            bool shouldApply = st.ScreenFilter_Enabled && st.ScreenFilter_Active;
+            ApplyFilter(shouldApply, st.ScreenFilter_Opacity, st.ScreenFilter_Color);
         }
 
         public static void ApplyFilter(bool enabled, int opacityPercent, Color color)

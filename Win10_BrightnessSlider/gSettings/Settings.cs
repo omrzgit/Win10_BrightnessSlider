@@ -56,6 +56,7 @@ namespace Win10_BrightnessSlider
         public bool LinkSliders { get; set; } = false;
 
         public bool ScreenFilter_Enabled { get; set; } = false;
+        public bool ScreenFilter_Active { get; set; } = true;
         public int ScreenFilter_Opacity { get; set; } = 30;
         public int ScreenFilter_ColorArgb { get; set; } = unchecked((int)0xFF000000);
 

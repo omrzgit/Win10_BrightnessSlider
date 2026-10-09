@@ -1150,7 +1150,7 @@ namespace Win10_BrightnessSlider
                 filterUc.Size = new Size(fLayPnl1.Controls[0].Width, fLayPnl1.Controls[0].Height);
             }
             SetupDraggableControl(filterUc);
-            SetupDraggableControl(filterUc.lbl_Name);
+            SetupDraggableControl(filterUc.pictureBox1);
             SetupDraggableControl(filterUc.lbl_value);
             return filterUc;
         }
@@ -1983,6 +1983,10 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 {
                     var st = Settings_json.Get();
                     st.ScreenFilter_Enabled = mi_screenFilter.Checked;
+                    if (st.ScreenFilter_Enabled)
+                    {
+                        st.ScreenFilter_Active = true;
+                    }
                     st.SaveTo_JsonFile();
                     ScreenFilterManager.ApplyFilter();
                     RePopulateSliders();
