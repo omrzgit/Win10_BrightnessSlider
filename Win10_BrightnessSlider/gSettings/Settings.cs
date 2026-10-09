@@ -56,6 +56,18 @@ namespace Win10_BrightnessSlider
         public bool LinkSliders { get; set; } = false;
         public bool ReapplyBrightnessPeriodically { get; set; } = false;
         public int ReapplyBrightnessIntervalMs { get; set; } = 30000;
+
+        public bool ScreenFilter_Enabled { get; set; } = false;
+        public bool ScreenFilter_Active { get; set; } = true;
+        public int ScreenFilter_Opacity { get; set; } = 30;
+        public int ScreenFilter_ColorArgb { get; set; } = unchecked((int)0xFF000000);
+
+        [JsonIgnore]
+        public Color ScreenFilter_Color
+        {
+            get => Color.FromArgb(ScreenFilter_ColorArgb);
+            set => ScreenFilter_ColorArgb = value.ToArgb();
+        }
     }
 
     public class MonitorNames

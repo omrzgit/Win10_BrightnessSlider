@@ -90,6 +90,9 @@ namespace Win10_BrightnessSlider
             SetupDraggableControl(this);
             SetupDraggableControl(this.fLayPnl1);
             this.fLayPnl1.Cursor = Cursors.SizeAll;
+            this.fLayPnl1.FlowDirection = FlowDirection.TopDown;
+            this.fLayPnl1.WrapContents = false;
+            this.fLayPnl1.AutoScroll = false;
 
 			this.Shown += Form1_Shown;
 
@@ -167,6 +170,11 @@ namespace Win10_BrightnessSlider
                 //notifyIcon_bright.Icon = ImageUtils.BytesToIcon(Resources.bright_gray);
                 notifyIcon_bright.Icon = Resources.sunny_black.BitmapToIcon();
             }
+
+            if (_filterSlider != null && !_filterSlider.IsDisposed)
+            {
+                _filterSlider.SetGUIColors(BackColor1, TextColor1, BorderColor1, settings_forTheme ?? Settings_json.Get());
+            }
         }
         private void SetColors_CustomTheme_ifEnabled()
         {
@@ -181,6 +189,11 @@ namespace Win10_BrightnessSlider
             TextColor1 = st.customTheme.textColor;
             //Colors
             this.BackColor = BackColor1;
+
+            if (_filterSlider != null && !_filterSlider.IsDisposed)
+            {
+                _filterSlider.SetGUIColors(BackColor1, TextColor1, BorderColor1, settings_forTheme);
+            }
 
             //Custom Theme DONOT Touch TaskBAR icon -tray icon
 
@@ -242,6 +255,7 @@ namespace Win10_BrightnessSlider
             //await Task.Delay(250);
             Thread.Sleep(250);
             //calling this again to fix issue, i have to manualy detect monitor
+            ScreenFilterManager.Initialize();
             riScreens = RePopulateSliders();
             RestoreSavedBrightness(riScreens);
 
@@ -712,6 +726,8 @@ namespace Win10_BrightnessSlider
                 //foreach (Control ctl in fLayPnl1.Controls){ ctl.Dispose(); }
                 fLayPnl1.Controls.Clear();
 
+				bool filterEnabled = settings.ScreenFilter_Enabled;
+
 				//foreach (var riscrX in riScreens)
 				for (int i = 0; i < riScreens.Count; i++)
                 {
@@ -733,7 +749,7 @@ namespace Win10_BrightnessSlider
 					if (ucSldr is ThemedUserControl themedControl)
 					{
 						themedControl.IsFirstItem = (i == 0);
-						themedControl.IsLastItem = (i == riScreens.Count - 1);
+						themedControl.IsLastItem = !filterEnabled && (i == riScreens.Count - 1);
 
 						themedControl.FrameColor = BorderColor1;
 					}
@@ -744,6 +760,19 @@ namespace Win10_BrightnessSlider
 					}
 
 					fLayPnl1.Controls.Add(ucSldr);
+                }
+
+                if (filterEnabled)
+                {
+                    _filterSlider = newFilterSlider_UC();
+                    _filterSlider.IsFirstItem = (riScreens.Count == 0);
+                    _filterSlider.IsLastItem = true;
+                    _filterSlider.FrameColor = BorderColor1;
+                    fLayPnl1.Controls.Add(_filterSlider);
+                }
+                else
+                {
+                    _filterSlider = null;
                 }
                 //uc_brSlider2_List = getUCSliderLi()
 
@@ -1105,6 +1134,27 @@ namespace Win10_BrightnessSlider
         private Dictionary<Iuc_brSlider, int> _sliderStartValues = new Dictionary<Iuc_brSlider, int>();
         private ToolStripMenuItem mi_linkSliders;
         private PictureBox pb_linkSliders;
+        private uc_filterSlider _filterSlider;
+
+        private uc_filterSlider newFilterSlider_UC()
+        {
+            var filterUc = new uc_filterSlider
+            {
+                Margin = Padding.Empty,
+                BackColor = BackColor1,
+            };
+            filterUc.SetGUIColors(BackColor1, TextColor1, BorderColor1, settings_forTheme);
+            var st = Settings_json.Get();
+            filterUc.UpdateValue(st.ScreenFilter_Opacity);
+            if (fLayPnl1.Controls.Count > 0)
+            {
+                filterUc.Size = new Size(fLayPnl1.Controls[0].Width, fLayPnl1.Controls[0].Height);
+            }
+            SetupDraggableControl(filterUc);
+            SetupDraggableControl(filterUc.pictureBox1);
+            SetupDraggableControl(filterUc.lbl_value);
+            return filterUc;
+        }
 
         private void HookSliderLinking(Iuc_brSlider slider)
         {
@@ -1473,11 +1523,19 @@ namespace Win10_BrightnessSlider
         }
         public void FixFormHeight()
         {
-            var ucSlderLi = getUCSliderList();
-
             try
             {
-                this.Height = ucSlderLi.Count() * ucSlderLi[0].Height;
+                int totalHeight = 0;
+                int maxWidth = this.Width;
+                foreach (Control ctl in fLayPnl1.Controls)
+                {
+                    totalHeight += ctl.Height;
+                    if (ctl.Width > maxWidth)
+                        maxWidth = ctl.Width;
+                }
+                this.Height = totalHeight > 0 ? totalHeight : 100;
+                if (maxWidth > this.Width)
+                    this.Width = maxWidth;
             }
             catch (Exception ex)
             {
@@ -1626,6 +1684,8 @@ namespace Win10_BrightnessSlider
 
 				this.WindowState = FormWindowState.Normal;
 				this.StartPosition = FormStartPosition.Manual;
+
+				FixFormHeight();
 
 				// One simple call handles Win10, Win11, Multi-Monitor, and Taskbar location
 				this.Location = GetWindowLocation();
@@ -2300,6 +2360,68 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
 
                 UpdateReapplyBrightnessMenu();
                 mi_extras.DropDown.Items.Add(mi_reapplyBrightness);
+
+                mi_extras.DropDown.Items.Add("-");
+                var mi_screenFilter = new ToolStripMenuItem("Screen Filter") { CheckOnClick = true };
+                mi_screenFilter.Checked = Settings_json.Get().ScreenFilter_Enabled;
+
+                var mi_filterColor = new ToolStripMenuItem("Filter Color...");
+                var mi_resetFilterColor = new ToolStripMenuItem("Reset Filter Color (Black)");
+
+                mi_screenFilter.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.ScreenFilter_Enabled = mi_screenFilter.Checked;
+                    if (st.ScreenFilter_Enabled)
+                    {
+                        st.ScreenFilter_Active = true;
+                    }
+                    st.SaveTo_JsonFile();
+                    ScreenFilterManager.ApplyFilter();
+                    RePopulateSliders();
+                    FixFormHeight();
+                    if (vis)
+                    {
+                        this.Location = GetWindowLocation();
+                        this.Region = isWindows11 ? RoundBorders.GetRegion_ForRoundCorner(this.Size, 16) : null;
+                    }
+                };
+
+                mi_filterColor.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    using (var cd = new ColorDialog())
+                    {
+                        cd.Color = st.ScreenFilter_Color;
+                        cd.FullOpen = true;
+                        if (cd.ShowDialog() == DialogResult.OK)
+                        {
+                            st.ScreenFilter_Color = cd.Color;
+                            st.SaveTo_JsonFile();
+                            ScreenFilterManager.UpdateColor(cd.Color);
+                            if (_filterSlider != null && !_filterSlider.IsDisposed)
+                            {
+                                _filterSlider.UpdatePreviewColor(cd.Color);
+                            }
+                        }
+                    }
+                };
+
+                mi_resetFilterColor.Click += (s, e) =>
+                {
+                    var st = Settings_json.Get();
+                    st.ScreenFilter_Color = Color.Black;
+                    st.SaveTo_JsonFile();
+                    ScreenFilterManager.UpdateColor(Color.Black);
+                    if (_filterSlider != null && !_filterSlider.IsDisposed)
+                    {
+                        _filterSlider.UpdatePreviewColor(Color.Black);
+                    }
+                };
+
+                mi_extras.DropDown.Items.Add(mi_screenFilter);
+                mi_extras.DropDown.Items.Add(mi_filterColor);
+                mi_extras.DropDown.Items.Add(mi_resetFilterColor);
             }
             cms.Items.Add(mi_wifiToggle);
             cms.Items.Add(mi_runAtStartUp);
