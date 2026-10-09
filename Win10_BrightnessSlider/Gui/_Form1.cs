@@ -1195,12 +1195,14 @@ namespace Win10_BrightnessSlider
         private bool _isEnforcingBrightness = false;
         private ToolStripMenuItem mi_reapplyBrightness;
         private ToolStripMenuItem mi_reapply_disabled;
-        private ToolStripMenuItem mi_reapply_500ms;
-        private ToolStripMenuItem mi_reapply_1s;
-        private ToolStripMenuItem mi_reapply_5s;
-        private ToolStripMenuItem mi_reapply_10s;
         private ToolStripMenuItem mi_reapply_30s;
         private ToolStripMenuItem mi_reapply_60s;
+        private ToolStripMenuItem mi_reapply_5min;
+        private ToolStripMenuItem mi_reapply_15min;
+        private ToolStripMenuItem mi_reapply_30min;
+        private ToolStripMenuItem mi_reapply_1hr;
+        private ToolStripMenuItem mi_reapply_2hr;
+        private ToolStripMenuItem mi_reapply_4hr;
         private ToolStripMenuItem mi_reapply_custom;
 
         private void InitEnforceBrightnessTimer()
@@ -1214,9 +1216,10 @@ namespace Win10_BrightnessSlider
                     _timerEnforceBrightness.Tick += TimerEnforceBrightness_Tick;
                 }
                 _timerEnforceBrightness.Stop();
-                if (st.ReapplyBrightnessPeriodically && st.ReapplyBrightnessIntervalMs >= 100)
+                if (st.ReapplyBrightnessPeriodically)
                 {
-                    _timerEnforceBrightness.Interval = Math.Max(100, st.ReapplyBrightnessIntervalMs);
+                    int interval = Math.Max(30000, st.ReapplyBrightnessIntervalMs);
+                    _timerEnforceBrightness.Interval = interval;
                     _timerEnforceBrightness.Start();
                 }
             }
@@ -1317,24 +1320,121 @@ namespace Win10_BrightnessSlider
             });
         }
 
+        private static string FormatInterval(int ms)
+        {
+            if (ms == 30000) return "30s";
+            if (ms == 60000) return "60s";
+            if (ms == 300000) return "5 min";
+            if (ms == 900000) return "15 min";
+            if (ms == 1800000) return "30 min";
+            if (ms == 3600000) return "1 hr";
+            if (ms == 7200000) return "2 hr";
+            if (ms == 14400000) return "4 hr";
+            if (ms >= 3600000 && ms % 3600000 == 0) return $"{ms / 3600000} hr";
+            if (ms >= 60000 && ms % 60000 == 0) return $"{ms / 60000} min";
+            if (ms >= 1000 && ms % 1000 == 0) return $"{ms / 1000}s";
+            return $"{ms / 1000}s";
+        }
+
+        private static int ParseIntervalMs(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return 0;
+            input = input.Trim().ToLowerInvariant();
+
+            if (input.EndsWith("ms"))
+            {
+                if (int.TryParse(input.Replace("ms", "").Trim(), out int val))
+                    return val;
+            }
+            if (input.EndsWith("min") || input.EndsWith("m"))
+            {
+                string num = input.Replace("min", "").Replace("m", "").Trim();
+                if (double.TryParse(num, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double mins))
+                    return (int)(mins * 60 * 1000);
+            }
+            if (input.EndsWith("hours") || input.EndsWith("hour") || input.EndsWith("hr") || input.EndsWith("h"))
+            {
+                string num = input.Replace("hours", "").Replace("hour", "").Replace("hr", "").Replace("h", "").Trim();
+                if (double.TryParse(num, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double hrs))
+                    return (int)(hrs * 3600 * 1000);
+            }
+            if (input.EndsWith("seconds") || input.EndsWith("sec") || input.EndsWith("s"))
+            {
+                string num = input.Replace("seconds", "").Replace("sec", "").Replace("s", "").Trim();
+                if (double.TryParse(num, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double secs))
+                    return (int)(secs * 1000);
+            }
+
+            if (double.TryParse(input, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double rawVal))
+            {
+                if (rawVal >= 30000) return (int)rawVal;
+                return (int)(rawVal * 1000);
+            }
+
+            return 0;
+        }
+
+        private static void ClampDropDownToCurrentMonitor(ToolStripDropDown dropDown, ToolStripMenuItem parentItem)
+        {
+            if (dropDown == null || parentItem == null) return;
+            try
+            {
+                var owner = parentItem.Owner;
+                if (owner == null) return;
+
+                Rectangle parentScreenBounds = owner.RectangleToScreen(parentItem.Bounds);
+                Screen screen = Screen.FromRectangle(parentScreenBounds);
+                Rectangle workingArea = screen.WorkingArea;
+
+                Rectangle ddBounds = dropDown.Bounds;
+
+                if (ddBounds.Right > workingArea.Right)
+                {
+                    int targetLeft = parentScreenBounds.Left - dropDown.Width;
+                    if (targetLeft < workingArea.Left)
+                        targetLeft = workingArea.Left;
+                    dropDown.Left = targetLeft;
+                }
+                else if (ddBounds.Left < workingArea.Left)
+                {
+                    dropDown.Left = workingArea.Left;
+                }
+
+                if (dropDown.Bottom > workingArea.Bottom)
+                {
+                    dropDown.Top = Math.Max(workingArea.Top, workingArea.Bottom - dropDown.Height);
+                }
+                if (dropDown.Top < workingArea.Top)
+                {
+                    dropDown.Top = workingArea.Top;
+                }
+            }
+            catch (Exception ex)
+            {
+                RamLogger.Log("ClampDropDownToCurrentMonitor error: " + ex);
+            }
+        }
+
         private void UpdateReapplyBrightnessMenu()
         {
             if (mi_reapply_disabled == null) return;
             var st = Settings_json.Get();
             bool enabled = st.ReapplyBrightnessPeriodically;
-            int ms = st.ReapplyBrightnessIntervalMs;
+            int ms = Math.Max(30000, st.ReapplyBrightnessIntervalMs);
 
             mi_reapply_disabled.Checked = !enabled;
-            mi_reapply_500ms.Checked = enabled && ms == 500;
-            mi_reapply_1s.Checked = enabled && ms == 1000;
-            mi_reapply_5s.Checked = enabled && ms == 5000;
-            mi_reapply_10s.Checked = enabled && ms == 10000;
             mi_reapply_30s.Checked = enabled && ms == 30000;
             mi_reapply_60s.Checked = enabled && ms == 60000;
+            mi_reapply_5min.Checked = enabled && ms == 300000;
+            mi_reapply_15min.Checked = enabled && ms == 900000;
+            mi_reapply_30min.Checked = enabled && ms == 1800000;
+            mi_reapply_1hr.Checked = enabled && ms == 3600000;
+            mi_reapply_2hr.Checked = enabled && ms == 7200000;
+            mi_reapply_4hr.Checked = enabled && ms == 14400000;
 
-            bool isPreset = (ms == 500 || ms == 1000 || ms == 5000 || ms == 10000 || ms == 30000 || ms == 60000);
+            bool isPreset = (ms == 30000 || ms == 60000 || ms == 300000 || ms == 900000 || ms == 1800000 || ms == 3600000 || ms == 7200000 || ms == 14400000);
             mi_reapply_custom.Checked = enabled && !isPreset;
-            mi_reapply_custom.Text = (enabled && !isPreset) ? $"Custom ({ms} ms)..." : "Custom Interval (ms)...";
+            mi_reapply_custom.Text = (enabled && !isPreset) ? $"Custom ({FormatInterval(ms)})..." : "Custom...";
         }
 
         void RestartApp_ifRamUsage_isBiggerThan(int maxAllowed_RamUsage = 150)
@@ -1966,6 +2066,30 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 //mi_extras.DropDown = new ToolStripDropDown();
                 //mi_extras.DropDown = new w11_ToolStripDropDown();
                 mi_extras.DropDown.ApplyRoundCorners(true);
+                mi_extras.DropDownOpening += (s, e) =>
+                {
+                    try
+                    {
+                        var owner = mi_extras.Owner;
+                        if (owner != null)
+                        {
+                            Rectangle parentScreenBounds = owner.RectangleToScreen(mi_extras.Bounds);
+                            Screen screen = Screen.FromRectangle(parentScreenBounds);
+                            int dropDownWidth = mi_extras.DropDown.PreferredSize.Width;
+                            if (dropDownWidth <= 0) dropDownWidth = 220;
+
+                            if (parentScreenBounds.Right + dropDownWidth > screen.WorkingArea.Right)
+                                mi_extras.DropDownDirection = ToolStripDropDownDirection.Left;
+                            else
+                                mi_extras.DropDownDirection = ToolStripDropDownDirection.Right;
+                        }
+                    }
+                    catch { }
+                };
+                mi_extras.DropDown.Opened += (s, e) =>
+                {
+                    ClampDropDownToCurrentMonitor(mi_extras.DropDown, mi_extras);
+                };
                 ////test
                 //mi_extras.DropDown.VisibleChanged += (s1,e1) => 
                 //{
@@ -2075,20 +2199,22 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 {
                     var st = Settings_json.Get();
                     st.ReapplyBrightnessPeriodically = true;
-                    st.ReapplyBrightnessIntervalMs = intervalMs;
+                    st.ReapplyBrightnessIntervalMs = Math.Max(30000, intervalMs);
                     st.SaveTo_JsonFile();
                     InitEnforceBrightnessTimer();
                     UpdateReapplyBrightnessMenu();
                 };
 
-                mi_reapply_500ms = new ToolStripMenuItem("Every 500 ms (Fastest / High CPU)", null, (s, e) => setReapplyPreset(500));
-                mi_reapply_1s = new ToolStripMenuItem("Every 1 second", null, (s, e) => setReapplyPreset(1000));
-                mi_reapply_5s = new ToolStripMenuItem("Every 5 seconds", null, (s, e) => setReapplyPreset(5000));
-                mi_reapply_10s = new ToolStripMenuItem("Every 10 seconds", null, (s, e) => setReapplyPreset(10000));
-                mi_reapply_30s = new ToolStripMenuItem("Every 30 seconds", null, (s, e) => setReapplyPreset(30000));
-                mi_reapply_60s = new ToolStripMenuItem("Every 60 seconds", null, (s, e) => setReapplyPreset(60000));
+                mi_reapply_30s = new ToolStripMenuItem("30s", null, (s, e) => setReapplyPreset(30000));
+                mi_reapply_60s = new ToolStripMenuItem("60s", null, (s, e) => setReapplyPreset(60000));
+                mi_reapply_5min = new ToolStripMenuItem("5 min", null, (s, e) => setReapplyPreset(300000));
+                mi_reapply_15min = new ToolStripMenuItem("15 min", null, (s, e) => setReapplyPreset(900000));
+                mi_reapply_30min = new ToolStripMenuItem("30 min", null, (s, e) => setReapplyPreset(1800000));
+                mi_reapply_1hr = new ToolStripMenuItem("1 hr", null, (s, e) => setReapplyPreset(3600000));
+                mi_reapply_2hr = new ToolStripMenuItem("2 hr", null, (s, e) => setReapplyPreset(7200000));
+                mi_reapply_4hr = new ToolStripMenuItem("4 hr", null, (s, e) => setReapplyPreset(14400000));
 
-                mi_reapply_custom = new ToolStripMenuItem("Custom Interval (ms)...", null, (s, e) =>
+                mi_reapply_custom = new ToolStripMenuItem("Custom...", null, (s, e) =>
                 {
                     var st = Settings_json.Get();
                     using (var prompt = new Form())
@@ -2103,8 +2229,8 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                         prompt.ShowInTaskbar = false;
                         prompt.TopMost = true;
 
-                        var lbl = new Label() { Left = 20, Top = 15, Width = 285, Text = "Enter interval in milliseconds (min 500 ms):" };
-                        var txt = new TextBox() { Left = 20, Top = 42, Width = 285, Text = st.ReapplyBrightnessIntervalMs.ToString() };
+                        var lbl = new Label() { Left = 20, Top = 15, Width = 285, Text = "Enter interval (e.g. 45s, 10 min, 1 hr - min 30s):" };
+                        var txt = new TextBox() { Left = 20, Top = 42, Width = 285, Text = FormatInterval(Math.Max(30000, st.ReapplyBrightnessIntervalMs)) };
                         var btnOk = new Button() { Text = "OK", Left = 135, Width = 80, Top = 80, DialogResult = DialogResult.OK };
                         var btnCancel = new Button() { Text = "Cancel", Left = 225, Width = 80, Top = 80, DialogResult = DialogResult.Cancel };
                         prompt.Controls.Add(lbl);
@@ -2116,26 +2242,16 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
 
                         if (prompt.ShowDialog(this) == DialogResult.OK)
                         {
-                            string input = txt.Text.Trim();
-                            int ms = 0;
-                            if (int.TryParse(input, out int parsedInt))
+                            int parsedMs = ParseIntervalMs(txt.Text);
+                            if (parsedMs > 0)
                             {
-                                ms = parsedInt;
-                            }
-                            else if (double.TryParse(input, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedDouble))
-                            {
-                                ms = (int)(parsedDouble * 1000);
-                            }
-
-                            if (ms > 0)
-                            {
-                                if (ms < 500)
+                                if (parsedMs < 30000)
                                 {
-                                    MessageBox.Show("For hardware safety and to prevent monitor bus locking, the minimum interval is clamped to 500 ms.", "Hardware Safety Limit", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                                    ms = 500;
+                                    MessageBox.Show("For hardware safety and system stability, minimum interval is limited to 30s. Setting to 30s.", "Safety Limit", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                    parsedMs = 30000;
                                 }
                                 st.ReapplyBrightnessPeriodically = true;
-                                st.ReapplyBrightnessIntervalMs = ms;
+                                st.ReapplyBrightnessIntervalMs = parsedMs;
                                 st.SaveTo_JsonFile();
                                 InitEnforceBrightnessTimer();
                                 UpdateReapplyBrightnessMenu();
@@ -2146,14 +2262,41 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
 
                 mi_reapplyBrightness.DropDownItems.Add(mi_reapply_disabled);
                 mi_reapplyBrightness.DropDownItems.Add("-");
-                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_500ms);
-                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_1s);
-                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_5s);
-                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_10s);
                 mi_reapplyBrightness.DropDownItems.Add(mi_reapply_30s);
                 mi_reapplyBrightness.DropDownItems.Add(mi_reapply_60s);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_5min);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_15min);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_30min);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_1hr);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_2hr);
+                mi_reapplyBrightness.DropDownItems.Add(mi_reapply_4hr);
                 mi_reapplyBrightness.DropDownItems.Add("-");
                 mi_reapplyBrightness.DropDownItems.Add(mi_reapply_custom);
+
+                mi_reapplyBrightness.DropDownOpening += (s, e) =>
+                {
+                    try
+                    {
+                        var owner = mi_reapplyBrightness.Owner;
+                        if (owner != null)
+                        {
+                            Rectangle parentScreenBounds = owner.RectangleToScreen(mi_reapplyBrightness.Bounds);
+                            Screen screen = Screen.FromRectangle(parentScreenBounds);
+                            int dropDownWidth = mi_reapplyBrightness.DropDown.PreferredSize.Width;
+                            if (dropDownWidth <= 0) dropDownWidth = 140;
+
+                            if (parentScreenBounds.Right + dropDownWidth > screen.WorkingArea.Right)
+                                mi_reapplyBrightness.DropDownDirection = ToolStripDropDownDirection.Left;
+                            else
+                                mi_reapplyBrightness.DropDownDirection = ToolStripDropDownDirection.Right;
+                        }
+                    }
+                    catch { }
+                };
+                mi_reapplyBrightness.DropDown.Opened += (s, e) =>
+                {
+                    ClampDropDownToCurrentMonitor(mi_reapplyBrightness.DropDown, mi_reapplyBrightness);
+                };
 
                 UpdateReapplyBrightnessMenu();
                 mi_extras.DropDown.Items.Add(mi_reapplyBrightness);
