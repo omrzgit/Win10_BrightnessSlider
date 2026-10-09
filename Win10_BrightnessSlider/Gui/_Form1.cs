@@ -90,6 +90,9 @@ namespace Win10_BrightnessSlider
             SetupDraggableControl(this);
             SetupDraggableControl(this.fLayPnl1);
             this.fLayPnl1.Cursor = Cursors.SizeAll;
+            this.fLayPnl1.FlowDirection = FlowDirection.TopDown;
+            this.fLayPnl1.WrapContents = false;
+            this.fLayPnl1.AutoScroll = false;
 
 			this.Shown += Form1_Shown;
 
@@ -1144,7 +1147,7 @@ namespace Win10_BrightnessSlider
             filterUc.UpdateValue(st.ScreenFilter_Opacity);
             if (fLayPnl1.Controls.Count > 0)
             {
-                filterUc.Width = fLayPnl1.Controls[0].Width;
+                filterUc.Size = new Size(fLayPnl1.Controls[0].Width, fLayPnl1.Controls[0].Height);
             }
             SetupDraggableControl(filterUc);
             SetupDraggableControl(filterUc.lbl_Name);
@@ -1276,12 +1279,16 @@ namespace Win10_BrightnessSlider
             try
             {
                 int totalHeight = 0;
+                int maxWidth = this.Width;
                 foreach (Control ctl in fLayPnl1.Controls)
                 {
-                    if (ctl.Visible)
-                        totalHeight += ctl.Height;
+                    totalHeight += ctl.Height;
+                    if (ctl.Width > maxWidth)
+                        maxWidth = ctl.Width;
                 }
                 this.Height = totalHeight > 0 ? totalHeight : 100;
+                if (maxWidth > this.Width)
+                    this.Width = maxWidth;
             }
             catch (Exception ex)
             {
@@ -1430,6 +1437,8 @@ namespace Win10_BrightnessSlider
 
 				this.WindowState = FormWindowState.Normal;
 				this.StartPosition = FormStartPosition.Manual;
+
+				FixFormHeight();
 
 				// One simple call handles Win10, Win11, Multi-Monitor, and Taskbar location
 				this.Location = GetWindowLocation();
@@ -1977,6 +1986,12 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                     st.SaveTo_JsonFile();
                     ScreenFilterManager.ApplyFilter();
                     RePopulateSliders();
+                    FixFormHeight();
+                    if (vis)
+                    {
+                        this.Location = GetWindowLocation();
+                        this.Region = isWindows11 ? RoundBorders.GetRegion_ForRoundCorner(this.Size, 16) : null;
+                    }
                 };
 
                 mi_filterColor.Click += (s, e) =>

@@ -16,6 +16,8 @@ namespace Win10_BrightnessSlider.Gui
         public uc_filterSlider()
         {
             this.DoubleBuffered = true;
+            this.AutoScaleDimensions = new SizeF(96F, 96F);
+            this.AutoScaleMode = AutoScaleMode.Dpi;
             this.Size = new Size(350, 73);
             this.Margin = Padding.Empty;
 
