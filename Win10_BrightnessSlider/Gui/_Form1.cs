@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -470,37 +470,85 @@ namespace Win10_BrightnessSlider
             ////requires ui to be visible, otherwise error.
             //var ucSlderLi = getUCSliderLi(); //var slider1 = ucSlderLi.FirstOrDefault();
 
-            var riScreen1 = riScreens.FirstOrDefault();
-            if (riScreen1 is null)
+            if (riScreens == null || riScreens.Count == 0)
                 return;
 
-            //dont freeze Global Key Hook - release it immediately by doing LongRunningProcess on Seperate Thread. (Task.Run)
+            AdjustBrightnessWithWheel(isIncrement);
+        }
+
+        private readonly object _wheelLock = new object();
+        private bool _isApplyingWheel = false;
+        private readonly Dictionary<RichInfoScreen, int> _cachedWheelBrightness = new Dictionary<RichInfoScreen, int>();
+
+        private void AdjustBrightnessWithWheel(bool isIncrement)
+        {
+            int delta = isIncrement ? 5 : -5;
+            var st = Settings_json.Get();
+
+            lock (_wheelLock)
+            {
+                var targets = (st.MouseWheelChangesAllScreens && riScreens.Count > 1)
+                    ? riScreens.ToList()
+                    : new List<RichInfoScreen> { riScreens.FirstOrDefault() };
+
+                foreach (var scr in targets)
+                {
+                    if (scr == null) continue;
+                    if (!_cachedWheelBrightness.TryGetValue(scr, out int val) || val < 0)
+                    {
+                        val = scr.GetBrightness();
+                        if (val < 0) val = 50;
+                    }
+                    _cachedWheelBrightness[scr] = (int)MathFn.Clamp(val + delta, 0, 100);
+                }
+
+                if (Visible) GUI_Update__StatesOnControls();
+                else
+                {
+                    var first = riScreens.FirstOrDefault();
+                    if (first != null && _cachedWheelBrightness.TryGetValue(first, out int b))
+                    {
+                        try { notifyIcon_bright.Text = $"Brightness: {b}%"; } catch { }
+                    }
+                }
+
+                if (_isApplyingWheel) return;
+                _isApplyingWheel = true;
+            }
+
             Task.Run(() =>
             {
-                this.Invoke((Action)delegate
+                while (true)
                 {
-                    var val = riScreen1.GetBrightness();
-
-                    if (isIncrement)
+                    List<KeyValuePair<RichInfoScreen, int>> applyTargets;
+                    lock (_wheelLock)
                     {
-                        var newval = MathFn.Clamp(val + 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, true);
-                    }
-                    else //if (e.Delta < 0)
-                    {
-                        var newval = MathFn.Clamp(val - 5, 0, 100);
-                        var ret = riScreen1.SetBrightness(newval, true);
+                        applyTargets = _cachedWheelBrightness.ToList();
                     }
 
-                    if (Visible)
+                    foreach (var kvp in applyTargets)
                     {
-                        GUI_Update__StatesOnControls();
+                        try { kvp.Key.SetBrightness(kvp.Value, false); } catch { }
                     }
-                    else
+
+                    lock (_wheelLock)
                     {
-                        Update_NotifyIconText_viaRiScreen();
+                        bool hasMore = false;
+                        foreach (var kvp in applyTargets)
+                        {
+                            if (_cachedWheelBrightness.TryGetValue(kvp.Key, out int latest) && latest != kvp.Value)
+                            {
+                                hasMore = true;
+                                break;
+                            }
+                        }
+                        if (!hasMore)
+                        {
+                            _isApplyingWheel = false;
+                            break;
+                        }
                     }
-                });
+                }
             });
         }
 
@@ -1456,6 +1504,14 @@ https://github.com/blackholeearth/Win10_BrightnessSlider
                 mi_extras.DropDown.Items.Add(new ToolStripMenuItem("___ReMap Keys___") { Enabled = false });
                 mi_extras.DropDown.Items.Add(mi_remapKey1);
                 mi_extras.DropDown.Items.Add(mi_hotkey_everything);
+
+                var mi_mouseWheelAllScreens = new ToolStripMenuItem("Mouse Wheel Changes All Screens") { CheckOnClick = true };
+                mi_mouseWheelAllScreens.Checked = settingsX.MouseWheelChangesAllScreens;
+                mi_mouseWheelAllScreens.Click += (s, e) =>
+                {
+                    Settings_json.Update(x => x.MouseWheelChangesAllScreens = mi_mouseWheelAllScreens.Checked);
+                };
+                mi_extras.DropDown.Items.Add(mi_mouseWheelAllScreens);
                 //mi_extras.DropDown.Items.Add("-");
             }
             cms.Items.Add(mi_wifiToggle);
